@@ -1,0 +1,8 @@
+version: 2
+updates:
+  # NuGet packages for the app, the core library and the tests.
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10

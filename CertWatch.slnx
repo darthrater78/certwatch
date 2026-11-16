@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CertWatch.App/CertWatch.App.csproj" />
+    <Project Path="src/CertWatch.Core/CertWatch.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/CertWatch.Core.Tests/CertWatch.Core.Tests.csproj" />
+  </Folder>
+</Solution>

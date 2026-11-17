@@ -7,7 +7,7 @@
 A Windows app for ZTNA demos. For every browser that's running, it shows, live, whether the site in
 the active tab is **steered into the ZTNA tunnel** and whether its certificate was **replaced for
 inspection**, with the path drawn out (browser → tunnel or direct → inspection → site). It calls
-out changes as Windows notifications, flags mTLS sites, and keeps an encrypted per-site history.
+out changes in pop-ups, flags mTLS sites, and keeps an encrypted per-site history.
 
 ## Run (on Windows)
 
@@ -36,7 +36,11 @@ theme, or Dark; the first run matches Windows). The **Log** window has **Debug d
 folder, Copy all and Clear log.
 
 Closing the window keeps CertWatch in the tray (the icon takes the latest verdict's colour); exit
-from the tray menu, which also has **Send test notification**.
+from the tray menu, which also has **Show test pop-up**.
+
+Pop-ups are CertWatch's own small cards in the bottom-right corner, not Windows notifications, so
+Do not disturb (which Windows often turns on while you share your screen) doesn't hide them. They
+close after a few seconds, stay while the mouse is over them, and open CertWatch when clicked.
 
 Optional command-line switches:
 
@@ -77,7 +81,7 @@ How CertWatch is built with regard to security, in statements you can check agai
   UI Automation (read-only). Site certificates come from CertWatch's own TLS connection to that
   site. Routes come from
   Windows' routing table (`GetBestRoute2`). All of it is treated as untrusted data: addresses are
-  parsed and only `https` hosts are checked, and notification text is passed to Windows as plain
+  parsed and only `https` hosts are checked, and pop-up text is shown as plain
   strings, never as markup.
 - **What it trusts.** Nothing it observes. CertWatch's own TLS connection accepts any certificate
   on purpose, because its job is to record what was presented. It sends no application data over
@@ -118,6 +122,8 @@ How CertWatch is built with regard to security, in statements you can check agai
   from earlier builds is migrated and the old pages are wiped.
 - 2026-11-16: Removed Launch for demo. CertWatch no longer starts a browser or talks to one over
   DevTools, so that whole channel (and the separate browser profile it kept) is gone.
+- 2026-11-16: Alerts are CertWatch's own pop-up windows instead of Windows notifications. They
+  show text as plain text, take no input other than a click to open CertWatch, and never take focus.
 - 2026-11-16: Notifications use Windows' built-in API instead of an unmaintained package
   (Microsoft.Toolkit.Uwp.Notifications, last released 2022).
 - 2026-11-16: The tray icon and notifications call Windows directly (`Shell_NotifyIcon`) instead of
@@ -140,7 +146,7 @@ The WPF app compiles on Linux (via `EnableWindowsTargeting`) and must run on Win
 anywhere.
 
 - `src/CertWatch.Core`: cross-platform. TLS check, verdict, egress, encrypted history.
-- `src/CertWatch.App`: Windows-only WPF app. UI Automation tracking, window, themes, tray, notifications, log.
+- `src/CertWatch.App`: Windows-only WPF app. UI Automation tracking, window, themes, tray, pop-ups, log.
 - `tests/CertWatch.Core.Tests`: xUnit, including a local TLS server (chain and mTLS).
 - `tools/make_icon.py`, `tools/gen_theme.py`: regenerate the icon and the theme files from `DESIGN.md`.
 

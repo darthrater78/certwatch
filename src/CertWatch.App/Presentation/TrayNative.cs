@@ -10,8 +10,7 @@ namespace CertWatch.App.Presentation;
 internal static unsafe partial class TrayNative
 {
     internal const uint NIM_ADD = 0, NIM_MODIFY = 1, NIM_DELETE = 2, NIM_SETVERSION = 4;
-    internal const uint NIF_MESSAGE = 0x1, NIF_ICON = 0x2, NIF_TIP = 0x4, NIF_INFO = 0x10, NIF_SHOWTIP = 0x80;
-    internal const uint NIIF_WARNING = 0x2, NIIF_USER = 0x4, NIIF_LARGE_ICON = 0x20, NIIF_RESPECT_QUIET_TIME = 0x80;
+    internal const uint NIF_MESSAGE = 0x1, NIF_ICON = 0x2, NIF_TIP = 0x4, NIF_SHOWTIP = 0x80;
     internal const uint NOTIFYICON_VERSION_4 = 4;
 
     // Callback events (low word of lParam under NOTIFYICON_VERSION_4).
@@ -52,7 +51,7 @@ internal static unsafe partial class TrayNative
         dest[n] = '\0';
     }
 
-    [LibraryImport("shell32.dll", EntryPoint = "Shell_NotifyIconW", SetLastError = true)]
+    [LibraryImport("shell32.dll", EntryPoint = "Shell_NotifyIconW")]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool Shell_NotifyIcon(uint message, ref NOTIFYICONDATAW data);
 

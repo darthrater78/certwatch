@@ -214,6 +214,7 @@ Flat. Depth comes from tone and 1px borders (`line`), never shadows. The only la
 
 - App header: slate bar, 36px, icon + name + version + GitHub and release-notes links, then Clear all…, Log, Theme.
 - Verdict card: tinted header with the 40px status tile, site and context line (11px), verdict headline (20px), actions on the right; path diagram of 24px-icon nodes joined by 2px status-coloured arrows; 4-column fact grid (label 11px muted, value 13px, mono for technical values).
+- Pop-up: 380px card in the bottom-right corner of the work area, Surface with a 1px LineStrong border and rounded corners; 40px status tile, title 14px semibold, text 13px, "CertWatch · click to open" label; dismiss ✕. Up to 4 stack upward, newest at the bottom.
 - Chips: icon + short text ("ZTNA · inspected", "ZTNA · steered", "Direct", "Untrusted").
 - Tables: header row on `surface-alt`, 12px muted labels; rows 30px with 1px dividers; selected row tinted with an inset bar. Clicking a row (site or history) shows it on the card; "Back to live" returns.
 

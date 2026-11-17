@@ -20,8 +20,9 @@ First release.
 - Path diagram on the card (browser → tunnel or direct → inspection → site), fact grid, and notes
   for mTLS sites, earlier inspection, and browser/own-connection mismatches.
 - Per-site history (each site listed once); click a site or a history entry to show it on the card.
-- Windows notifications when a site is steered to ZTNA, when inspection is found or stops, the inspecting CA changes, traffic moves
-  to another adapter, or a site uses mTLS; "Send test notification" in the tray menu.
+- Pop-ups (CertWatch's own, so Do not disturb can't hide them) when a site is steered to ZTNA, when
+  inspection is found or stops, the inspecting CA changes, traffic moves to another adapter, or a
+  site uses mTLS; "Show test pop-up" in the tray menu.
 - Log window with debug detail and optional file logging. "Clear browser" in each tab clears that
   browser's history; "Clear all" in the header clears every browser's history and the log.
 - Two themes, Flashbang (bright) and Dark, switched from the header (the first run matches Windows); app icon, root export (.cer, .pem or full chain).
@@ -34,4 +35,4 @@ First release.
 ### Changed
 
 - Smaller download: the single-file exe is compressed, bundles only English framework resources,
-  and no longer carries WinForms or the WinRT SDK (tray icon and notifications use Win32 directly).
+  and no longer carries WinForms or the WinRT SDK (the tray icon uses Win32 directly).

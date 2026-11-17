@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using System.IO;
 using System.Windows;
 using System.Windows.Interop;
@@ -11,8 +10,8 @@ namespace CertWatch.App.Presentation;
 
 /// <summary>
 /// The tray icon: the CertWatch shield-and-split-path symbol on a tile coloured by the latest
-/// verdict (slate while waiting), drawn with WPF and shown through Shell_NotifyIcon. Notifications
-/// are the icon's balloons, which Windows 10 and 11 show as standard notifications.
+/// verdict (slate while waiting), drawn with WPF and shown through Shell_NotifyIcon. Notifications are
+/// CertWatch's own pop-ups (<see cref="PopupNotifier"/>), not the icon's balloons.
 /// Must be created and used on the UI thread.
 /// </summary>
 internal sealed unsafe class TrayIcon : IDisposable
@@ -57,27 +56,6 @@ internal sealed unsafe class TrayIcon : IDisposable
         var data = NewData(NIF_ICON | NIF_TIP | NIF_SHOWTIP);
         Shell_NotifyIcon(NIM_MODIFY, ref data);
         if (old != IntPtr.Zero) Native.DestroyIcon(old);
-    }
-
-    /// <summary>
-    /// Shows a notification. Alerts use the Windows warning glyph; the rest show the verdict tile.
-    /// Returns null when Windows accepted it, otherwise why it didn't. Windows can still hold back an
-    /// accepted one (Do not disturb, or notifications turned off for CertWatch); it then goes straight
-    /// to the notification centre.
-    /// </summary>
-    public string? Notify(string title, string text, bool important)
-    {
-        var data = NewData(NIF_INFO);
-        Copy(title, data.szInfoTitle, InfoTitleChars);
-        Copy(text, data.szInfo, InfoChars);
-        data.dwInfoFlags = important ? NIIF_WARNING : NIIF_USER | NIIF_LARGE_ICON;
-        data.hBalloonIcon = important ? IntPtr.Zero : _hicon;
-        if (Shell_NotifyIcon(NIM_MODIFY, ref data)) return null;
-
-        // The icon may be gone (Explorer restarted before TaskbarCreated arrived): add it back, try once more.
-        var error = Marshal.GetLastPInvokeError();
-        Add();
-        return Shell_NotifyIcon(NIM_MODIFY, ref data) ? null : $"Shell_NotifyIcon failed (error {error}, then {Marshal.GetLastPInvokeError()})";
     }
 
     private NOTIFYICONDATAW NewData(uint flags)
@@ -138,7 +116,7 @@ internal sealed unsafe class TrayIcon : IDisposable
         {
             AppendMenu(menu, MF_STRING, (nuint)MenuCommand.Open, "Open CertWatch");
             AppendMenu(menu, MF_STRING, (nuint)MenuCommand.Recheck, "Re-check now");
-            AppendMenu(menu, MF_STRING, (nuint)MenuCommand.TestNotification, "Send test notification");
+            AppendMenu(menu, MF_STRING, (nuint)MenuCommand.TestNotification, "Show test pop-up");
             AppendMenu(menu, MF_SEPARATOR, 0, null);
             AppendMenu(menu, MF_STRING, (nuint)MenuCommand.Exit, "Exit");
 

@@ -29,6 +29,7 @@ public partial class MainWindow : Window
     private readonly CertProbe _probe = new();
     private readonly InspectionClassifier _classifier = new(PublicRootSet.LoadEmbedded());
     private readonly TrayIcon _tray = new();
+    private readonly PopupNotifier _popups = new();
     private readonly WindowsRouteLookup _routes = new();
     private readonly List<BrowserSession> _sessions = [];
     private readonly DispatcherTimer _browserScan = new() { Interval = TimeSpan.FromSeconds(3) };
@@ -56,12 +57,12 @@ public partial class MainWindow : Window
         _tray.OpenRequested += () => Dispatcher.BeginInvoke(ShowFromTray); // also raised by clicking a notification
         _tray.RecheckRequested += () => SessionFor(_shell.SelectedTab)?.RecheckNow();
         _tray.ExitRequested += ExitApp;
+        _popups.OpenRequested += ShowFromTray;
         _tray.TestNotificationRequested += () =>
         {
-            var failure = _tray.Notify("CertWatch test notification",
-                "If you can see this, CertWatch pop-ups work. If not, check Windows Settings › System › Notifications (and that Do not disturb is off).", important: false);
-            if (failure is null) LogService.Info("notify", "Test notification handed to Windows");
-            else LogService.Error("notify", $"Test notification not shown ({failure})");
+            _popups.Show(new PopupContent("CertWatch test pop-up",
+                "Pop-ups like this appear when a site is steered to ZTNA, inspected, or changes.", StatusKind.Steered), important: false);
+            LogService.Info("notify", "Test pop-up shown");
         };
         _tray.SetState(StatusKind.Neutral, "CertWatch: waiting for a browser");
 
@@ -103,13 +104,13 @@ public partial class MainWindow : Window
         var browser = session.Browser.DisplayName;
         var site = check.Probe.Endpoint.ToString();
         var treatment = PathTreatment.Of(c.Verdict, check.Egress?.Kind.ToString());
-        _tray.SetState(Status.Of(treatment, c.Verdict), $"CertWatch · {browser} · {site}: {VerdictStyle.Short(treatment, c.Verdict)}");
+        var status = Status.Of(treatment, c.Verdict);
+        _tray.SetState(status, $"CertWatch · {browser} · {site}: {VerdictStyle.Short(treatment, c.Verdict)}");
 
         foreach (var (title, text, important) in NotificationsFor(check, browser, site, treatment))
         {
-            var failure = _tray.Notify(title, text, important);
-            if (failure is null) LogService.Info("notify", $"{title}: {text}");
-            else LogService.Error("notify", $"Not shown ({failure}): {title}: {text}");
+            _popups.Show(new PopupContent(title, text, status), important);
+            LogService.Info("notify", $"{title}: {text}");
         }
     }
 
@@ -224,6 +225,7 @@ public partial class MainWindow : Window
         _exiting = true;
         _browserScan.Stop();
         foreach (var s in _sessions.ToList()) s.Dispose();
+        _popups.CloseAll();
         _tray.Dispose();
         _history.Dispose();
         _logWindow?.Close();

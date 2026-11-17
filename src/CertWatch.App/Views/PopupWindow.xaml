@@ -1,0 +1,26 @@
+<Window x:Class="CertWatch.App.Views.PopupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="CertWatch" Width="380" SizeToContent="Height"
+        WindowStyle="None" ResizeMode="NoResize" Topmost="True" ShowInTaskbar="False" ShowActivated="False"
+        Background="{DynamicResource Surface}" Foreground="{DynamicResource OnSurface}"
+        BorderBrush="{DynamicResource LineStrong}" BorderThickness="1"
+        FontFamily="{StaticResource UiFont}" FontSize="13" Cursor="Hand"
+        AutomationProperties.LiveSetting="Assertive">
+    <!-- CertWatch's own notification (DESIGN.md: verdict tile + text). Shown instead of a Windows
+         notification so Do not disturb during a screen share can't hide it. Click opens CertWatch. -->
+    <DockPanel Margin="12,10,8,12">
+        <Border DockPanel.Dock="Left" Style="{StaticResource StatusSolid}" Width="40" Height="40" CornerRadius="4"
+                Margin="0,2,12,0" VerticalAlignment="Top">
+            <Path Style="{StaticResource StatusIcon}" Stroke="{DynamicResource OnStatus}" Width="22" Height="22"/>
+        </Border>
+        <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}" Foreground="{DynamicResource OnSurfaceMuted}"
+                Content="✕" Width="28" Height="28" Padding="0" VerticalAlignment="Top" Margin="4,0,0,0"
+                Click="OnDismiss" ToolTip="Dismiss" AutomationProperties.Name="Dismiss"/>
+        <StackPanel>
+            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" TextWrapping="Wrap"/>
+            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+            <TextBlock Text="CertWatch · click to open" Style="{StaticResource Label}" Margin="0,6,0,0"/>
+        </StackPanel>
+    </DockPanel>
+</Window>

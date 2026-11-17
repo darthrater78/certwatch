@@ -34,7 +34,7 @@
 
 
   <ItemGroup>
-    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.15" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="11.0.0" />
   </ItemGroup>
 
   <!-- Ship the newest .NET 10 security patch in the self-contained build. The build host's SDK only

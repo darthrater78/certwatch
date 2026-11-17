@@ -1,6 +1,7 @@
 <UserControl x:Class="CertWatch.App.Views.BrowserView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Foreground="{DynamicResource OnSurface}">
     <!-- One browser tab (DESIGN.md): card (verdict, path, facts, notes) → sites → history. -->
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>

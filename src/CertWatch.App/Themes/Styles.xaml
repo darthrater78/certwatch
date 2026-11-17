@@ -393,6 +393,14 @@
         </Style.Triggers>
     </Style>
 
+    <!-- Windows' TabControl style sets the system text colour (black), which every untinted text in a
+         browser tab inherits. Take the theme's instead. -->
+    <Style TargetType="TabControl">
+        <Setter Property="Foreground" Value="{DynamicResource OnSurface}"/>
+        <Setter Property="Background" Value="{DynamicResource Surface}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+    </Style>
+
     <!-- Browser tabs: 40px, 4px top corners; the selected tab merges into the content surface -->
     <Style TargetType="TabItem">
         <Setter Property="Foreground" Value="{DynamicResource OnSurface}"/>

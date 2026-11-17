@@ -14,7 +14,7 @@ public sealed record Fact(string Label, string Value, bool Mono = false, string?
 /// <summary>One hop in the card's path diagram.</summary>
 public sealed record PathNode(string Title, string Sub, StatusKind Status, Geometry Icon, bool HasArrow, StatusKind LineStatus);
 
-/// <summary>A note strip under the card (browser/own-connection mismatch, mTLS, earlier inspection).</summary>
+/// <summary>A note strip under the card (mTLS, earlier inspection).</summary>
 public sealed record CardNote(string Text, StatusKind Status);
 
 /// <summary>One entry in a site's history (first visit or a change). Clicking it shows it on the card.</summary>

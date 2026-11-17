@@ -65,7 +65,17 @@ Two independent measurements, combined into one label per site:
 
 Labels: **Steered to ZTNA · inspected**, **Steered to ZTNA · not inspected**, **Inspected on this
 device** (certificate replaced, traffic not tunnelled), **Direct · not inspected**. Sites inspected
-earlier stay marked "Was inspected". Servers that ask for a client certificate are flagged **mTLS**.
+earlier stay marked "Was inspected". Servers that ask for a client certificate are flagged **mTLS**;
+a steered mTLS site that isn't inspected reads **Steered to ZTNA · not inspected (mTLS: needs
+bypass)**, because an inspecting proxy can't present your client certificate. Servers that ask for
+one only later in the connection (TLS 1.3 post-handshake authentication) aren't detected.
+
+**Certificate pinning isn't detected, by design.** Pinning is a check inside the client, not
+something a server shows, so no outside connection can see it. In browsers it doesn't block
+inspection: dynamic pinning (HPKP) was removed in 2018, and Chrome and Edge skip their built-in pins
+for certificates from a locally installed root, which is what inspecting proxies use. A browser site
+that isn't inspected is bypassed by a rule, not by pinning. Desktop apps that pin (and fail when
+inspected) aren't browsers, so CertWatch doesn't follow them.
 
 The check is CertWatch's own connection from this machine, along the same route the browser's
 traffic takes. A browser that routes or inspects its own traffic differently (for example, through

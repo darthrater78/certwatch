@@ -18,7 +18,7 @@ First release.
   friendly name, with the route shown. Combined labels: steered and inspected, steered but not
   inspected, inspected on this device, direct.
 - Path diagram on the card (browser → tunnel or direct → inspection → site), fact grid, and notes
-  for mTLS sites, earlier inspection, and browser/own-connection mismatches.
+  for mTLS sites and earlier inspection. A steered mTLS site's headline says it needs a bypass.
 - Per-site history (each site listed once); click a site or a history entry to show it on the card.
 - Pop-ups (CertWatch's own, so Do not disturb can't hide them) when a site is steered to ZTNA, when
   inspection is found or stops, the inspecting CA changes, traffic moves to another adapter, or a

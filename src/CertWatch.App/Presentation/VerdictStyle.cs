@@ -26,12 +26,17 @@ internal static class VerdictStyle
         _ => Short(v),
     };
 
-    public static string Headline(Treatment t, Verdict v, string? vendor)
+    /// <param name="mutualTls">
+    /// The site asks for a client certificate. A steered site that isn't inspected then says why: an
+    /// inspecting proxy can't present the user's client certificate, so mTLS sites need a bypass rule.
+    /// </param>
+    public static string Headline(Treatment t, Verdict v, string? vendor, bool mutualTls = false)
     {
         var by = vendor is null ? "" : $" by {vendor}";
         return t switch
         {
             Treatment.SteeredAndInspected => $"Steered to ZTNA · inspected{by}",
+            Treatment.SteeredNotInspected when mutualTls => "Steered to ZTNA · not inspected (mTLS: needs bypass)",
             Treatment.SteeredNotInspected => "Steered to ZTNA · not inspected",
             Treatment.InspectedOnDevice => $"Inspected on this device{by}",
             Treatment.Inspected => $"Inspected{by}",

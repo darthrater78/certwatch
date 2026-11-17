@@ -102,7 +102,7 @@ public sealed class VerdictCard : Observable
         Status = Presentation.Status.Of(treatment, d.Verdict);
         Site = d.Site;
         Context = $"{d.Site} · {_browserName} · {(live ? $"checked {d.Time.LocalDateTime:T}" : "")}{(live ? " · " : "")}{d.Source}";
-        Headline = VerdictStyle.Headline(treatment, d.Verdict, d.Vendor);
+        Headline = VerdictStyle.Headline(treatment, d.Verdict, d.Vendor, d.MutualTls);
         var change = VerdictStyle.Describe(d.Change);
         Subline = change is null || d.Change == ChangeKind.FirstSeen ? d.Reason : $"{change} · {d.Reason}";
         Fingerprint = d.Fingerprint ?? "";

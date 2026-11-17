@@ -18,7 +18,7 @@ internal static class VerdictStyle
     public static string Short(Treatment t, Verdict v) => t switch
     {
         Treatment.SteeredAndInspected => "ZTNA · inspected",
-        Treatment.SteeredNotInspected => "ZTNA · clean",
+        Treatment.SteeredNotInspected => "ZTNA · steered",
         Treatment.InspectedOnDevice => "Inspected on device",
         Treatment.Inspected => "Inspected",
         Treatment.Direct => "Direct",

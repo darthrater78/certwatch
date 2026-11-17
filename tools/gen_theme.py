@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerates src/CertWatch.App/Themes/{Light,Dark}.xaml from the colour tokens in DESIGN.md.
+"""Regenerates src/CertWatch.App/Themes/{Flashbang,Dark}.xaml from the colour tokens in DESIGN.md.
 
 Usage: python3 -I tools/gen_theme.py   (run from the repo root)
 """
@@ -10,11 +10,11 @@ ROOT = Path(__file__).resolve().parent.parent
 TOKENS = dict(re.findall(r'^\s{2}([a-z0-9-]+):\s*"(#[0-9A-Fa-f]{6})"',
                          (ROOT / "DESIGN.md").read_text(encoding="utf-8").split("---")[1], re.M))
 
-# Brush key -> (light token, dark token)
+# Brush key -> (Flashbang token, Dark token)
 KEYS = {
     "Brand": ("brand", "brand-dark"), "OnBrand": ("on-brand", "on-brand"), "OnBrandMuted": ("on-brand-muted", "on-brand-muted"),
     "Ground": ("ground", "ground-dark"), "Surface": ("surface", "surface-dark"), "SurfaceAlt": ("surface-alt", "surface-alt-dark"),
-    "Line": ("line", "line-dark"), "LineStrong": ("line-strong", "line-dark"), "OnSurface": ("on-surface", "on-surface-dark"),
+    "Line": ("line", "line-dark"), "LineStrong": ("line-strong", "line-strong-dark"), "OnSurface": ("on-surface", "on-surface-dark"),
     "OnSurfaceMuted": ("on-surface-muted", "on-surface-muted-dark"), "Heading": ("heading", "heading-dark"),
     "PrimaryButton": ("brand", "heading-dark"), "OnPrimaryButton": ("on-brand", "brand-dark"),
     "Inspected": ("inspected", "inspected"), "InspectedTint": ("inspected-tint", "inspected-tint-dark"), "OnInspectedTint": ("on-inspected-tint", "on-inspected-tint-dark"),
@@ -25,7 +25,7 @@ KEYS = {
     "OnStatus": ("on-status", "on-status"),
 }
 
-for theme, idx in (("Light", 0), ("Dark", 1)):
+for theme, idx in (("Flashbang", 0), ("Dark", 1)):
     lines = ['<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"',
              '                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">',
              f'    <!-- {theme} theme. Generated from the colour tokens in DESIGN.md; edit the tokens, not this file. -->']

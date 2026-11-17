@@ -8,7 +8,7 @@
         <Border DockPanel.Dock="Top" Background="{DynamicResource SurfaceAlt}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Padding="12,8">
             <DockPanel LastChildFill="False">
                 <CheckBox x:Name="DebugBox" Content="_Debug detail" Margin="0,0,16,0" Click="OnDebug"
-                          ToolTip="Also log address-bar reads, routes, issuers and DevTools traffic"/>
+                          ToolTip="Also log address-bar reads, routes and issuers"/>
                 <CheckBox x:Name="FileBox" Content="Write log to _file" Margin="0,0,16,0" Click="OnFile"
                           ToolTip="Append the log to %LOCALAPPDATA%\CertWatch\logs. Entries name the sites you visit; off by default."/>
                 <TextBlock Text="Filter" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,6,0"/>

@@ -52,7 +52,7 @@ internal static unsafe partial class TrayNative
         dest[n] = '\0';
     }
 
-    [LibraryImport("shell32.dll", EntryPoint = "Shell_NotifyIconW")]
+    [LibraryImport("shell32.dll", EntryPoint = "Shell_NotifyIconW", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool Shell_NotifyIcon(uint message, ref NOTIFYICONDATAW data);
 

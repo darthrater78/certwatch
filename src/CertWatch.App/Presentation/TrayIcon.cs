@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.IO;
 using System.Windows;
 using System.Windows.Interop;
@@ -58,15 +59,25 @@ internal sealed unsafe class TrayIcon : IDisposable
         if (old != IntPtr.Zero) Native.DestroyIcon(old);
     }
 
-    /// <summary>Shows a notification. Alerts use the Windows warning glyph; the rest show the verdict tile.</summary>
-    public void Notify(string title, string text, bool important)
+    /// <summary>
+    /// Shows a notification. Alerts use the Windows warning glyph; the rest show the verdict tile.
+    /// Returns null when Windows accepted it, otherwise why it didn't. Windows can still hold back an
+    /// accepted one (Do not disturb, or notifications turned off for CertWatch); it then goes straight
+    /// to the notification centre.
+    /// </summary>
+    public string? Notify(string title, string text, bool important)
     {
         var data = NewData(NIF_INFO);
         Copy(title, data.szInfoTitle, InfoTitleChars);
         Copy(text, data.szInfo, InfoChars);
-        data.dwInfoFlags = NIIF_RESPECT_QUIET_TIME | (important ? NIIF_WARNING : NIIF_USER | NIIF_LARGE_ICON);
+        data.dwInfoFlags = important ? NIIF_WARNING : NIIF_USER | NIIF_LARGE_ICON;
         data.hBalloonIcon = important ? IntPtr.Zero : _hicon;
-        Shell_NotifyIcon(NIM_MODIFY, ref data);
+        if (Shell_NotifyIcon(NIM_MODIFY, ref data)) return null;
+
+        // The icon may be gone (Explorer restarted before TaskbarCreated arrived): add it back, try once more.
+        var error = Marshal.GetLastPInvokeError();
+        Add();
+        return Shell_NotifyIcon(NIM_MODIFY, ref data) ? null : $"Shell_NotifyIcon failed (error {error}, then {Marshal.GetLastPInvokeError()})";
     }
 
     private NOTIFYICONDATAW NewData(uint flags)

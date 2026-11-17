@@ -33,6 +33,7 @@ colors:
   surface-dark: "#232833"
   surface-alt-dark: "#262B36"
   line-dark: "#343B48"
+  line-strong-dark: "#4A5263"
   on-surface-dark: "#E6E8EC"
   on-surface-muted-dark: "#A3AAB6"
   heading-dark: "#C9D3EA"
@@ -191,7 +192,7 @@ A tool a sales engineer keeps open beside the browser during live ZTNA demos, re
 
 ## Colors
 
-Status colours carry meaning and nothing else: violet = inspected, blue = steered to ZTNA but not inspected, teal = direct, red = untrusted. Inspection is not red, because in a ZTNA demo it means the product is working. Status colours appear as a solid 40px tile (white symbol), as tinted chips (tint background, dark ink), and as path-diagram connectors. Slate (`brand`) is the identity colour: app header, headings, primary button. Each theme has its own tokens (`*-dark`).
+Status colours carry meaning and nothing else: violet = inspected, blue = steered to ZTNA but not inspected, teal = direct, red = untrusted. Inspection is not red, because in a ZTNA demo it means the product is working. Status colours appear as a solid 40px tile (white symbol), as tinted chips (tint background, dark ink), and as path-diagram connectors. Slate (`brand`) is the identity colour: app header, headings, primary button. Two themes: Flashbang (bright, the base tokens) and Dark (`*-dark` tokens, falling back to the base token where none is given). Every control, including scrollbars, tooltips, menus, checkboxes and table headers, takes its colours from the active theme; none keeps Windows' light defaults.
 
 ## Typography
 
@@ -199,7 +200,7 @@ Segoe UI Variable throughout, chosen to match Windows 11, at 13px body with 11px
 
 ## Layout
 
-8px grid. Window padding 12px. Table rows 30px, controls 32px tall, chips 18px. No empty bands: the card is header (verdict) → path diagram → 4-column fact grid; then sites, then history, each directly under its title. Tabs carry the browser name plus a one-line live status so every browser's state is visible without switching.
+8px grid. Window padding 12px. Table rows 30px, controls 32px tall, chips 18px. No empty bands: the card is header (verdict) → path diagram → 4-column fact grid; then sites, then history, each directly under its title. Sites and history share the height left under the card (3:2), so the page always fills the window; below 600px the page scrolls. Tabs carry the browser name plus a one-line live status so every browser's state is visible without switching.
 
 ## Elevation & Depth
 
@@ -211,9 +212,9 @@ Flat. Depth comes from tone and 1px borders (`line`), never shadows. The only la
 
 ## Components
 
-- App header: slate bar, 36px, icon + name + version + GitHub and release-notes links, then Log, Theme.
+- App header: slate bar, 36px, icon + name + version + GitHub and release-notes links, then Clear all…, Log, Theme.
 - Verdict card: tinted header with the 40px status tile, site and context line (11px), verdict headline (20px), actions on the right; path diagram of 24px-icon nodes joined by 2px status-coloured arrows; 4-column fact grid (label 11px muted, value 13px, mono for technical values).
-- Chips: icon + short text ("ZTNA · inspected", "ZTNA · clean", "Direct", "Untrusted").
+- Chips: icon + short text ("ZTNA · inspected", "ZTNA · steered", "Direct", "Untrusted").
 - Tables: header row on `surface-alt`, 12px muted labels; rows 30px with 1px dividers; selected row tinted with an inset bar. Clicking a row (site or history) shows it on the card; "Back to live" returns.
 
 ## Do's and Don'ts

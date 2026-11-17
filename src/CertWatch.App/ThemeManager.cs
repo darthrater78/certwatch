@@ -6,41 +6,29 @@ using Microsoft.Win32;
 namespace CertWatch.App;
 
 /// <summary>
-/// Swaps the Light/Dark colour dictionary (Themes/*.xaml). "System" follows Windows' app theme
-/// setting and updates live when it changes. Also darkens the window's title bar to match.
+/// Swaps the colour dictionary (Themes/Flashbang.xaml or Themes/Dark.xaml) and darkens the window
+/// title bars to match. With no saved choice, the first run follows Windows' app theme setting.
 /// </summary>
 internal static partial class ThemeManager
 {
-    private static ThemeMode _mode = ThemeMode.System;
+    private static ThemeMode _mode = ThemeMode.Flashbang;
     private static readonly List<Window> Windows = [];
 
     public static ThemeMode Mode => _mode;
-    public static bool IsDark { get; private set; }
+    public static bool IsDark => _mode == ThemeMode.Dark;
     public static event Action? Changed;
 
-    public static void Initialize(ThemeMode mode)
+    public static void Initialize(ThemeMode? saved)
     {
-        _mode = mode;
-        SystemEvents.UserPreferenceChanged += (_, e) =>
-        {
-            if (e.Category == UserPreferenceCategory.General && _mode == ThemeMode.System)
-                Application.Current.Dispatcher.BeginInvoke(Apply);
-        };
+        _mode = saved is { } m && Enum.IsDefined(m) ? m : SystemUsesDarkTheme() ? ThemeMode.Dark : ThemeMode.Flashbang;
         Apply();
     }
 
-    public static void Set(ThemeMode mode)
+    public static void Toggle()
     {
-        _mode = mode;
+        _mode = IsDark ? ThemeMode.Flashbang : ThemeMode.Dark;
         Apply();
     }
-
-    public static ThemeMode Next() => _mode switch
-    {
-        ThemeMode.System => ThemeMode.Light,
-        ThemeMode.Light => ThemeMode.Dark,
-        _ => ThemeMode.System,
-    };
 
     /// <summary>Registers a window so its title bar follows the theme.</summary>
     public static void Track(Window window)
@@ -52,9 +40,8 @@ internal static partial class ThemeManager
 
     private static void Apply()
     {
-        IsDark = _mode == ThemeMode.Dark || (_mode == ThemeMode.System && SystemUsesDarkTheme());
         var dictionaries = Application.Current.Resources.MergedDictionaries;
-        var theme = new ResourceDictionary { Source = new Uri($"Themes/{(IsDark ? "Dark" : "Light")}.xaml", UriKind.Relative) };
+        var theme = new ResourceDictionary { Source = new Uri($"Themes/{_mode}.xaml", UriKind.Relative) };
         if (dictionaries.Count > 0) dictionaries[0] = theme;
         else dictionaries.Add(theme);
         foreach (var w in Windows) ApplyTitleBar(w);

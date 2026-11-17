@@ -1,7 +1,7 @@
 <UserControl x:Class="CertWatch.App.Views.BrowserView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <!-- One browser tab (DESIGN.md): card (verdict, path, facts, notes) → open tabs (demo) → sites → history. -->
+    <!-- One browser tab (DESIGN.md): card (verdict, path, facts, notes) → sites → history. -->
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <Style x:Key="HideWhenEmpty" TargetType="FrameworkElement">
@@ -28,20 +28,22 @@
         </Style>
     </UserControl.Resources>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{DynamicResource Surface}">
-        <StackPanel Margin="12,10,12,12">
-
-            <!-- Saved result on the card instead of the live tab -->
-            <Border Style="{StaticResource StatusTint}" DataContext="{Binding}" CornerRadius="4" Padding="10,4" Margin="0,0,0,8"
-                    Visibility="{Binding ShowingSaved, Converter={StaticResource BoolToVis}}">
-                <DockPanel>
-                    <Button DockPanel.Dock="Right" Style="{StaticResource SmallButton}" Content="_Back to live" Command="{Binding BackToLiveCommand}" Margin="8,0,0,0"/>
-                    <TextBlock Text="{Binding CardNote}" TextWrapping="Wrap" VerticalAlignment="Center" FontWeight="SemiBold"/>
-                </DockPanel>
-            </Border>
+    <!-- The page fills the window: Sites and History share the height left under the card, so there is
+         no empty band at the bottom. Below MinHeight the whole page scrolls instead of squashing the tables. -->
+    <ScrollViewer x:Name="Page" VerticalScrollBarVisibility="Auto" Background="{DynamicResource Surface}">
+        <Grid MinHeight="600" Height="{Binding ViewportHeight, ElementName=Page}">
+        <Grid Margin="12,10,12,12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="3*" MinHeight="120"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="2*" MinHeight="90"/>
+            </Grid.RowDefinitions>
 
             <!-- Verdict card -->
-            <Border Style="{StaticResource Card}">
+            <Border Grid.Row="0" Style="{StaticResource Card}">
                 <StackPanel>
                     <Border Style="{StaticResource StatusTint}" DataContext="{Binding Card}" CornerRadius="3,3,0,0" Padding="12,10"
                             BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1">
@@ -51,13 +53,15 @@
                             </Border>
                             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0"
                                         DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}">
-                                <Button Content="_Re-check" Command="{Binding RecheckCommand}" Margin="0,0,6,0"/>
+                                <!-- Saved result: Back to live takes Re-check's place, so the card keeps its size. -->
+                                <Button Content="_Re-check" Command="{Binding RecheckCommand}" Margin="0,0,6,0"
+                                        Visibility="{Binding ShowingLive, Converter={StaticResource BoolToVis}}"/>
+                                <Button Style="{StaticResource PrimaryButtonStyle}" Content="_Back to live" Command="{Binding BackToLiveCommand}" Margin="0,0,6,0"
+                                        Visibility="{Binding ShowingSaved, Converter={StaticResource BoolToVis}}"
+                                        ToolTip="{Binding CardNote}"/>
                                 <Button Content="_Copy SHA-256" Command="{Binding CopyFingerprintCommand}" Margin="0,0,6,0"/>
                                 <Button Content="_Export root" Command="{Binding ExportRootCommand}" Margin="0,0,6,0"
                                         ToolTip="Save this site's root certificate (.cer or .pem) or the full chain"/>
-                                <Button Style="{StaticResource PrimaryButtonStyle}" Content="_Launch for demo" Command="{Binding LaunchDemoCommand}"
-                                        Visibility="{Binding CanLaunchDemo, Converter={StaticResource BoolToVis}}"
-                                        ToolTip="Optional. Opens a separate window of this browser, in its own CertWatch tab, so every open tab and the exact certificate the browser received can be read. Your normal windows keep working here."/>
                             </StackPanel>
                             <StackPanel VerticalAlignment="Center">
                                 <TextBlock Style="{StaticResource StatusInk}" Text="{Binding Context}" FontSize="12" TextTrimming="CharacterEllipsis"/>
@@ -137,39 +141,24 @@
                 </StackPanel>
             </Border>
 
-            <!-- Demo tab: the demo window's open tabs -->
-            <StackPanel Visibility="{Binding HasOpenTabs, Converter={StaticResource BoolToVis}}">
-                <TextBlock Text="Open tabs in the demo window" Style="{StaticResource SectionTitle}" Margin="0,12,0,6"/>
-                <Border Style="{StaticResource Card}">
-                    <DataGrid ItemsSource="{Binding OpenTabs}" MaxHeight="220" AutomationProperties.Name="Open tabs in the demo window">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Tab" Binding="{Binding Title}" Width="3*"/>
-                            <DataGridTextColumn Header="Site" Binding="{Binding Site}" Width="2*"/>
-                            <DataGridTemplateColumn Header="Now" Width="Auto" CellTemplate="{StaticResource ChipCell}"/>
-                            <DataGridTextColumn Header="Egress" Binding="{Binding Egress}" Width="2*"/>
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </Border>
-            </StackPanel>
-
             <!-- Sites: each once -->
-            <DockPanel Margin="0,12,0,6" LastChildFill="False">
+            <DockPanel Grid.Row="1" Margin="0,12,0,6" LastChildFill="False">
                 <TextBlock Text="Sites" Style="{StaticResource SectionTitle}"/>
                 <TextBlock Text="{Binding SiteCount}" Style="{StaticResource Muted}" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                <Button DockPanel.Dock="Right" Style="{StaticResource SmallButton}" Content="Clear e_verything…" Command="{Binding ClearEverythingCommand}" Margin="6,0,0,0"
-                        ToolTip="Clear every site's history in every browser, and the log"/>
+                <Button DockPanel.Dock="Right" Style="{StaticResource SmallButton}" Content="Clear _browser…" Command="{Binding ClearBrowserCommand}" Margin="6,0,0,0"
+                        ToolTip="Clear every site's history for this browser only"/>
                 <Button DockPanel.Dock="Right" Style="{StaticResource SmallButton}" Content="Clear _site" Command="{Binding ClearSiteCommand}" Margin="6,0,0,0"
                         ToolTip="Clear the selected site's history for this browser"/>
                 <TextBox DockPanel.Dock="Right" Width="170" Text="{Binding SiteFilter, UpdateSourceTrigger=PropertyChanged}"
                          AutomationProperties.Name="Filter sites" ToolTip="Filter sites by name"/>
                 <TextBlock DockPanel.Dock="Right" Text="Filter" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,6,0"/>
             </DockPanel>
-            <Border Background="{DynamicResource SteeredTint}" CornerRadius="4" Padding="8,4" Margin="0,0,0,6"
+            <Border Grid.Row="2" Background="{DynamicResource SteeredTint}" CornerRadius="4" Padding="8,4" Margin="0,0,0,6"
                     Tag="{Binding StatusMessage}" Style="{StaticResource HideWhenEmpty}">
                 <TextBlock Text="{Binding StatusMessage}" Foreground="{DynamicResource OnSteeredTint}" FontWeight="SemiBold" FontSize="12" TextWrapping="Wrap"/>
             </Border>
-            <Border Style="{StaticResource Card}">
-                <DataGrid ItemsSource="{Binding SitesView}" SelectedItem="{Binding SelectedSite, Mode=TwoWay}" MinHeight="90" MaxHeight="300"
+            <Border Grid.Row="3" Style="{StaticResource Card}">
+                <DataGrid ItemsSource="{Binding SitesView}" SelectedItem="{Binding SelectedSite, Mode=TwoWay}"
                           AutomationProperties.Name="Sites seen in this browser">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Site" Binding="{Binding Host}" Width="2*" FontWeight="SemiBold"/>
@@ -202,9 +191,9 @@
             </Border>
 
             <!-- History of the selected site: click an entry to show it on the card -->
-            <TextBlock Text="{Binding HistoryTitle}" Style="{StaticResource SectionTitle}" Margin="0,12,0,6"/>
-            <Border Style="{StaticResource Card}">
-                <DataGrid ItemsSource="{Binding History}" SelectedItem="{Binding SelectedHistory, Mode=TwoWay}" MinHeight="60" MaxHeight="240"
+            <TextBlock Grid.Row="4" Text="{Binding HistoryTitle}" Style="{StaticResource SectionTitle}" Margin="0,12,0,6"/>
+            <Border Grid.Row="5" Style="{StaticResource Card}">
+                <DataGrid ItemsSource="{Binding History}" SelectedItem="{Binding SelectedHistory, Mode=TwoWay}"
                           CanUserSortColumns="False" AutomationProperties.Name="History for the selected site">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="Auto"/>
@@ -215,6 +204,7 @@
                     </DataGrid.Columns>
                 </DataGrid>
             </Border>
-        </StackPanel>
+        </Grid>
+        </Grid>
     </ScrollViewer>
 </UserControl>

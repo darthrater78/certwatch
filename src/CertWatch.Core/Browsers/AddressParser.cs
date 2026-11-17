@@ -42,6 +42,16 @@ public static class AddressParser
         return new SiteEndpoint(uri.IdnHost.ToLowerInvariant(), uri.Port);
     }
 
+    /// <summary>
+    /// For an address bar that has keyboard focus. While focused, Chromium shows a loaded page's full
+    /// URL with "https://", but text the user is typing has no scheme ("ipchicken.c" on the way to
+    /// "ipchicken.com"), so only text with an explicit https:// is taken as the page.
+    /// </summary>
+    public static SiteEndpoint? ParseFocused(string? addressBarText) =>
+        addressBarText is not null && addressBarText.TrimStart().StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+            ? Parse(addressBarText)
+            : null;
+
     // "example.com:8443/..." — the colon is followed by digits, so it's a port, not a scheme.
     private static bool IsPortColon(string text, int colon)
     {

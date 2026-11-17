@@ -3,29 +3,25 @@ using System.ComponentModel;
 using System.Windows.Data;
 using System.Windows.Input;
 using CertWatch.Core.Browsers;
-using CertWatch.Core.Cdp;
 using CertWatch.Core.History;
 using CertWatch.Core.Monitoring;
 
 namespace CertWatch.App.Presentation;
 
 /// <summary>
-/// One browser tab: the live card, every site seen (once each), the selected site's history, and,
-/// for a demo tab, the demo window's open tabs. Clicking a site or a history entry shows that saved
+/// One browser tab: the live card, every site seen (once each) and the selected site's history.
+/// Clicking a site or a history entry shows that saved
 /// result on the card; "Back to live" (or the browser moving to a new site) returns to live.
 /// </summary>
 public sealed class BrowserTabViewModel : Observable
 {
     private SiteEndpoint? _liveSite;
     private SiteCheck? _lastLive;
-    private IReadOnlyList<OpenTab> _lastTabs = [];
 
-    public BrowserTabViewModel(BrowserDefinition browser, bool isDemo)
+    public BrowserTabViewModel(BrowserDefinition browser)
     {
         Browser = browser;
-        IsDemo = isDemo;
-        Card = new VerdictCard(browser.DisplayName, isDemo);
-        CanLaunchDemo = !isDemo && browser.Engine == BrowserEngine.Chromium;
+        Card = new VerdictCard(browser.DisplayName);
 
         SitesView = (ListCollectionView)CollectionViewSource.GetDefaultView(Sites);
         SitesView.SortDescriptions.Add(new SortDescription(nameof(SiteRow.LastSeen), ListSortDirection.Descending));
@@ -36,35 +32,29 @@ public sealed class BrowserTabViewModel : Observable
         RecheckCommand = new RelayCommand(() => RecheckRequested?.Invoke());
         CopyFingerprintCommand = new RelayCommand(() => { if (Card.Fingerprint.Length > 0) System.Windows.Clipboard.SetText(Card.Fingerprint); });
         ExportRootCommand = new RelayCommand(() => StatusMessage = RootExporter.Export(Card.Chain, Card.Site) ?? StatusMessage);
-        LaunchDemoCommand = new RelayCommand(() => LaunchDemoRequested?.Invoke());
         ClearSiteCommand = new RelayCommand(() => { if (SelectedSite is { } row) ClearSiteRequested?.Invoke(row); });
-        ClearEverythingCommand = new RelayCommand(() => ClearEverythingRequested?.Invoke());
+        ClearBrowserCommand = new RelayCommand(() => ClearBrowserRequested?.Invoke());
         BackToLiveCommand = new RelayCommand(BackToLive);
     }
 
     public BrowserDefinition Browser { get; }
-    public bool IsDemo { get; }
     public string Name => Browser.DisplayName;
     public VerdictCard Card { get; }
-    public bool CanLaunchDemo { get; }
 
     public ObservableCollection<SiteRow> Sites { get; } = [];
     public ListCollectionView SitesView { get; }
     public ObservableCollection<HistoryRow> History { get; } = [];
-    public ObservableCollection<OpenTabRow> OpenTabs { get; } = [];
 
     public ICommand RecheckCommand { get; }
     public ICommand CopyFingerprintCommand { get; }
     public ICommand ExportRootCommand { get; }
-    public ICommand LaunchDemoCommand { get; }
     public ICommand ClearSiteCommand { get; }
-    public ICommand ClearEverythingCommand { get; }
+    public ICommand ClearBrowserCommand { get; }
     public ICommand BackToLiveCommand { get; }
 
     public event Action? RecheckRequested;
-    public event Action? LaunchDemoRequested;
     public event Action<SiteRow>? ClearSiteRequested;
-    public event Action? ClearEverythingRequested;
+    public event Action? ClearBrowserRequested;
     /// <summary>A site was selected; the session loads its history.</summary>
     public event Action<SiteRow?>? SiteSelected;
 
@@ -79,12 +69,19 @@ public sealed class BrowserTabViewModel : Observable
 
     private string _cardNote = "";
     /// <summary>Set when the card shows a saved result instead of the live tab.</summary>
-    public string CardNote { get => _cardNote; private set { if (Set(ref _cardNote, value)) OnChanged(nameof(ShowingSaved)); } }
+    public string CardNote
+    {
+        get => _cardNote;
+        private set
+        {
+            if (!Set(ref _cardNote, value)) return;
+            OnChanged(nameof(ShowingSaved));
+            OnChanged(nameof(ShowingLive));
+        }
+    }
     public bool ShowingSaved => _cardNote.Length > 0;
+    public bool ShowingLive => !ShowingSaved;
 
-    private bool _demoClosed;
-    public bool DemoClosed { get => _demoClosed; set => Set(ref _demoClosed, value); }
-    public bool HasOpenTabs => OpenTabs.Count > 0;
 
     private string _filter = "";
     public string SiteFilter
@@ -133,8 +130,8 @@ public sealed class BrowserTabViewModel : Observable
         _lastLive = null;
         CardNote = "";
         Status = StatusKind.Neutral;
-        TabStatus = DemoClosed ? "Demo window closed" : "No HTTPS page";
-        Card.ShowWaiting(DemoClosed ? "The demo window was closed. Launch it again from the normal tab." : null);
+        TabStatus = "No HTTPS page";
+        Card.ShowWaiting();
     }
 
     public void ShowChecking(SiteEndpoint site)
@@ -177,7 +174,6 @@ public sealed class BrowserTabViewModel : Observable
             row.Update(o);
         }
         if (row == _selectedSite && o.Change != ChangeKind.None) History.Insert(0, new HistoryRow(o));
-        if (_lastTabs.Count > 0) RefreshOpenTabs();
         return row;
     }
 
@@ -255,25 +251,5 @@ public sealed class BrowserTabViewModel : Observable
         OnChanged(nameof(SelectedSite));
         OnChanged(nameof(HistoryTitle));
         History.Clear();
-    }
-
-    // ---- demo window's open tabs ----
-
-    public void SetOpenTabs(IReadOnlyList<OpenTab> tabs)
-    {
-        _lastTabs = tabs;
-        RefreshOpenTabs();
-    }
-
-    private void RefreshOpenTabs()
-    {
-        OpenTabs.Clear();
-        foreach (var tab in _lastTabs)
-        {
-            var row = Sites.FirstOrDefault(s => s.Endpoint == tab.Site);
-            OpenTabs.Add(new OpenTabRow(string.IsNullOrWhiteSpace(tab.Title) ? tab.Site.ToString() : tab.Title,
-                tab.Site.ToString(), row?.Status ?? StatusKind.Neutral, row?.Verdict ?? "Checking…", row?.Egress ?? ""));
-        }
-        OnChanged(nameof(HasOpenTabs));
     }
 }

@@ -26,13 +26,14 @@ In a tab:
   whether it was **inspected earlier** even if it isn't now. Filter it by name.
 - **History** shows the selected site's first visit and every change. **Click a site or a history
   entry** to show that saved result on the card; **Back to live** returns.
-- **Clear site** clears one site for that browser. **Clear everything…** clears all history in
-  every browser and the log.
+- **Clear site** clears one site for that browser; **Clear browser…** clears all of that browser's
+  history.
 
-In the header: **GitHub** and **Release notes** links, **Log**, and **Theme** (System, Light, Dark;
-System follows Windows). The **Log** window has **Debug detail** (address-bar reads, routes, issuers,
-DevTools traffic) and **Write log to file** (off by default), plus Open log folder, Copy all and
-Clear log.
+In the header: **GitHub** and **Release notes** links, **Clear all…** (every browser's history and
+the log), **Log**, and **Theme** (Flashbang, the bright
+theme, or Dark; the first run matches Windows). The **Log** window has **Debug detail**
+(address-bar reads, routes and issuers) and **Write log to file** (off by default), plus Open log
+folder, Copy all and Clear log.
 
 Closing the window keeps CertWatch in the tray (the icon takes the latest verdict's colour); exit
 from the tray menu, which also has **Send test notification**.
@@ -44,16 +45,6 @@ CertWatch.exe --browser island                  # always show this tab, even bef
 CertWatch.exe --process SomeBrowser.exe         # add a tab for a browser not in the built-in list
 CertWatch.exe --interval 10                     # re-check each current site every 10 s (default 15)
 ```
-
-## Launch for demo (optional exact mode)
-
-On a Chrome, Edge or Brave tab, **Launch for demo** opens a separate window of that browser with
-its own CertWatch profile (`%LOCALAPPDATA%\CertWatch\profiles\<browser>`), connected to CertWatch
-over a private DevTools pipe, and adds a **"<browser> · demo"** tab for it. That tab reads the exact
-certificate the browser received and checks **every open tab** in the demo window. A separate profile
-is required because Chrome 136+ refuses remote debugging on the normal profile. Your normal windows
-keep being tracked on the normal tab. Closing the demo window ends it; the demo tab stays with its
-history.
 
 ## How it decides
 
@@ -72,9 +63,9 @@ Labels: **Steered to ZTNA · inspected**, **Steered to ZTNA · not inspected**, 
 device** (certificate replaced, traffic not tunnelled), **Direct · not inspected**. Sites inspected
 earlier stay marked "Was inspected". Servers that ask for a client certificate are flagged **mTLS**.
 
-Without Launch for demo, the check is CertWatch's own connection from this machine. A browser that
-routes or inspects its own traffic differently may see something else; in exact mode CertWatch
-shows when the browser's certificate differs from its own connection's.
+The check is CertWatch's own connection from this machine, along the same route the browser's
+traffic takes. A browser that routes or inspects its own traffic differently (for example, through
+its own built-in proxy) may see something else.
 
 ## Security architecture
 
@@ -84,7 +75,7 @@ How CertWatch is built with regard to security, in statements you can check agai
 
 - **What it reads.** The active tab's address comes from the browser's address bar through Windows
   UI Automation (read-only). Site certificates come from CertWatch's own TLS connection to that
-  site; in **Launch for demo** mode, also from the demo browser over DevTools. Routes come from
+  site. Routes come from
   Windows' routing table (`GetBestRoute2`). All of it is treated as untrusted data: addresses are
   parsed and only `https` hosts are checked, and notification text is passed to Windows as plain
   strings, never as markup.
@@ -108,15 +99,10 @@ How CertWatch is built with regard to security, in statements you can check agai
     started.
   - `window.json`, `settings.json`: window position, theme and log options, plain (not sensitive).
   - `logs\certwatch-<date>.log`: written **only** when you turn on **Write log to file**. Plain text,
-    and it names the sites you visit, so it's off by default; **Clear log** and **Clear everything**
+    and it names the sites you visit, so it's off by default; **Clear log** and **Clear all**
     delete these files. Without it, the log lives only in memory (last 5,000 entries).
-  - `profiles\<browser>`: the demo browser's own profile. It holds whatever you sign into in the
-    demo window, protected by that browser's own storage protections.
 - **Network exposure.** CertWatch listens on nothing. Outbound, it makes one TLS handshake per site
-  you visit, through the system proxy when one is set. In demo mode it talks to the browser it
-  started over `--remote-debugging-pipe`: two anonymous pipes that only CertWatch and that browser
-  hold, with the browser limited to inheriting exactly those two handles. There is no debugging
-  port, so no other program on the PC can control the demo browser.
+  you visit, through the system proxy when one is set. It never starts or controls a browser.
 - **Dependencies and releases.** NuGet packages are pinned and audited at every security gate
   (`dotnet list package --vulnerable --include-transitive`), and Dependabot watches them. The
   project stays on the .NET 10 LTS line, and the self-contained build pins the newest .NET security
@@ -127,11 +113,11 @@ How CertWatch is built with regard to security, in statements you can check agai
 ### Changes
 
 - 2026-11-16: Added the log. It's in memory by default; writing it to disk is opt-in, and "Clear
-  everything" deletes it along with all history.
+  all" deletes it along with all history.
 - 2026-11-16: History is encrypted at rest (AES-256-GCM, key protected by DPAPI). Plaintext history
   from earlier builds is migrated and the old pages are wiped.
-- 2026-11-16: Demo mode uses a private DevTools pipe instead of a local debugging port, which any
-  program on the PC could have reached.
+- 2026-11-16: Removed Launch for demo. CertWatch no longer starts a browser or talks to one over
+  DevTools, so that whole channel (and the separate browser profile it kept) is gone.
 - 2026-11-16: Notifications use Windows' built-in API instead of an unmaintained package
   (Microsoft.Toolkit.Uwp.Notifications, last released 2022).
 - 2026-11-16: The tray icon and notifications call Windows directly (`Shell_NotifyIcon`) instead of
@@ -153,9 +139,9 @@ scripts/build.sh            # both
 The WPF app compiles on Linux (via `EnableWindowsTargeting`) and must run on Windows. Core tests run
 anywhere.
 
-- `src/CertWatch.Core`: cross-platform. TLS check, verdict, egress, encrypted history, DevTools pipe client.
+- `src/CertWatch.Core`: cross-platform. TLS check, verdict, egress, encrypted history.
 - `src/CertWatch.App`: Windows-only WPF app. UI Automation tracking, window, themes, tray, notifications, log.
-- `tests/CertWatch.Core.Tests`: xUnit, including a local TLS server (chain and mTLS) and a fake browser over pipes.
+- `tests/CertWatch.Core.Tests`: xUnit, including a local TLS server (chain and mTLS).
 - `tools/make_icon.py`, `tools/gen_theme.py`: regenerate the icon and the theme files from `DESIGN.md`.
 
 ### CI and releases

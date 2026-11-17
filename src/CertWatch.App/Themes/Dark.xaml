@@ -8,7 +8,7 @@
     <SolidColorBrush x:Key="Surface" Color="#232833"/>
     <SolidColorBrush x:Key="SurfaceAlt" Color="#262B36"/>
     <SolidColorBrush x:Key="Line" Color="#343B48"/>
-    <SolidColorBrush x:Key="LineStrong" Color="#343B48"/>
+    <SolidColorBrush x:Key="LineStrong" Color="#4A5263"/>
     <SolidColorBrush x:Key="OnSurface" Color="#E6E8EC"/>
     <SolidColorBrush x:Key="OnSurfaceMuted" Color="#A3AAB6"/>
     <SolidColorBrush x:Key="Heading" Color="#C9D3EA"/>

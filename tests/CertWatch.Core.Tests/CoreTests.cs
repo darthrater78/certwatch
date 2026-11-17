@@ -34,6 +34,24 @@ public class AddressParserTests
     {
         Assert.Null(AddressParser.Parse(text));
     }
+
+    [Theory]
+    [InlineData("ipchicken.c")]                  // half-typed: looks like an address, but isn't the page
+    [InlineData("portal.contoso.com:8443/login")]
+    [InlineData("how to check certificates")]
+    [InlineData("http://plain.example.com/")]
+    [InlineData(null)]
+    public void Ignores_focused_text_without_https_scheme(string? text)
+    {
+        Assert.Null(AddressParser.ParseFocused(text));
+    }
+
+    [Fact]
+    public void Accepts_focused_full_https_url()
+    {
+        Assert.Equal(new SiteEndpoint("go.microsoft.com", 443),
+            AddressParser.ParseFocused("https://go.microsoft.com/fwlink/?linkid=2348321"));
+    }
 }
 
 public class ChangeDetectorTests

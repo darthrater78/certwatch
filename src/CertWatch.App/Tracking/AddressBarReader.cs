@@ -45,9 +45,9 @@ internal sealed class AddressBarReader(BrowserDefinition browser, Func<int, bool
             if (!_addressBar.TryGetCurrentPattern(ValuePattern.Pattern, out var pattern)) return _lastValue;
             var value = ((ValuePattern)pattern).Current.Value;
 
-            // While the user is typing in the bar the text may be a partial search, not the loaded page.
-            // Accept it anyway when it's a real web address (e.g. the bar just kept focus after a tab switch).
-            if (_addressBar.Current.HasKeyboardFocus && AddressParser.Parse(value) is null) return _lastValue;
+            // While the user is typing in the bar the text is a partial address or search, not the loaded
+            // page. Accept focused text only when it is a full https:// URL (the bar kept focus after a load).
+            if (_addressBar.Current.HasKeyboardFocus && AddressParser.ParseFocused(value) is null) return _lastValue;
 
             _lastValue = value;
             return _lastValue;

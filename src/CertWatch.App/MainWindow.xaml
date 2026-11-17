@@ -23,9 +23,11 @@
                     <Hyperlink NavigateUri="{Binding ReleaseNotesUrl}" RequestNavigate="OnLink">Release notes</Hyperlink>
                 </TextBlock>
                 <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}" Content="{Binding ThemeText}" Click="OnTheme"
-                        ToolTip="Switch theme: System, Light, Dark"/>
+                        ToolTip="Switch theme: Flashbang (bright) or Dark"/>
                 <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}" Content="_Log" Click="OnLog"
                         ToolTip="Open the log, with debug options"/>
+                <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}" Content="Clear _all…" Click="OnClearAll"
+                        ToolTip="Clear every site's history in every browser, and the log"/>
             </DockPanel>
         </Border>
 

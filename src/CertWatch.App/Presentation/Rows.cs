@@ -28,8 +28,6 @@ public sealed record HistoryRow(Observation Observation)
     public string MutualTls => Observation.MutualTls ? "mTLS" : "";
 }
 
-/// <summary>An HTTPS tab open in the demo browser, with its site's current result.</summary>
-public sealed record OpenTabRow(string Title, string Site, StatusKind Status, string Verdict, string Egress);
 
 /// <summary>One site in the "Sites" list. Updated in place so the list never shows a site twice.</summary>
 public sealed class SiteRow(SiteEndpoint endpoint) : Observable

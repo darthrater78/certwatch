@@ -17,7 +17,7 @@ using CertWatch.Core.Trust;
 namespace CertWatch.App;
 
 /// <summary>
-/// One window, one tab per browser (plus a tab per demo window). Browsers are added automatically
+/// One window, one tab per browser. Browsers are added automatically
 /// when they start running; a tab stays after its browser closes so its history remains visible.
 /// </summary>
 public partial class MainWindow : Window
@@ -34,6 +34,8 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _browserScan = new() { Interval = TimeSpan.FromSeconds(3) };
     // Browser|site pairs already announced as inspected this session, so each gets one pop-up.
     private readonly HashSet<string> _announcedInspected = [];
+    // Browser|site pairs already announced as steered to ZTNA (not inspected) this session.
+    private readonly HashSet<string> _announcedSteered = [];
     private LogWindow? _logWindow;
     private bool _exiting;
 
@@ -54,8 +56,13 @@ public partial class MainWindow : Window
         _tray.OpenRequested += () => Dispatcher.BeginInvoke(ShowFromTray); // also raised by clicking a notification
         _tray.RecheckRequested += () => SessionFor(_shell.SelectedTab)?.RecheckNow();
         _tray.ExitRequested += ExitApp;
-        _tray.TestNotificationRequested += () => _tray.Notify("CertWatch test notification",
-            "If you can see this, CertWatch pop-ups work. If not, check Windows Settings › System › Notifications (and that Do not disturb is off).", important: false);
+        _tray.TestNotificationRequested += () =>
+        {
+            var failure = _tray.Notify("CertWatch test notification",
+                "If you can see this, CertWatch pop-ups work. If not, check Windows Settings › System › Notifications (and that Do not disturb is off).", important: false);
+            if (failure is null) LogService.Info("notify", "Test notification handed to Windows");
+            else LogService.Error("notify", $"Test notification not shown ({failure})");
+        };
         _tray.SetState(StatusKind.Neutral, "CertWatch: waiting for a browser");
 
         foreach (var b in options.Browsers) AddSession(b);
@@ -73,14 +80,12 @@ public partial class MainWindow : Window
         }
     }
 
-    private BrowserSession AddSession(BrowserDefinition browser, DemoBrowser? demo = null)
+    private BrowserSession AddSession(BrowserDefinition browser)
     {
         var existing = _sessions.FirstOrDefault(s => s.Browser.Id == browser.Id);
         if (existing is not null) return existing;
-        var session = new BrowserSession(browser, _probe, _classifier, _history, _options.RecheckInterval, Dispatcher, _routes, demo);
+        var session = new BrowserSession(browser, _probe, _classifier, _history, _options.RecheckInterval, Dispatcher, _routes);
         session.Checked += OnChecked;
-        session.ClearEverythingRequested += ClearEverything;
-        session.LaunchDemoRequested += s => _ = LaunchDemoAsync(s);
         _sessions.Add(session);
         _shell.Tabs.Add(session.View);
         _shell.SelectedTab ??= session.View;
@@ -89,43 +94,6 @@ public partial class MainWindow : Window
     }
 
     private BrowserSession? SessionFor(BrowserTabViewModel? tab) => _sessions.FirstOrDefault(s => s.View == tab);
-
-    // ---- Launch for demo: a separate browser window in its own tab ----
-
-    private async Task LaunchDemoAsync(BrowserSession normal)
-    {
-        var browser = normal.Browser;
-        if (!DemoBrowserLauncher.Confirm(browser.DisplayName)) return;
-
-        var demoDefinition = browser with { Id = $"{browser.Id}-demo", DisplayName = $"{browser.DisplayName} · demo" };
-        if (_sessions.FirstOrDefault(s => s.Browser.Id == demoDefinition.Id) is { } old)
-        {
-            if (!old.View.DemoClosed) { _shell.SelectedTab = old.View; return; } // already running
-            RemoveSession(old);
-        }
-
-        try
-        {
-            normal.View.StatusMessage = $"Starting a {browser.DisplayName} window for the demo…";
-            var demo = await DemoBrowserLauncher.LaunchAsync(browser);
-            DemoRegistry.Add(demo.Process.Id);
-            normal.View.StatusMessage = "";
-            _shell.SelectedTab = AddSession(demoDefinition, demo).View;
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or System.IO.IOException)
-        {
-            normal.View.StatusMessage = "";
-            LogService.Error(browser.Id, $"Launch for demo failed: {ex.Message}");
-            MessageBox.Show(this, $"Couldn't start {browser.DisplayName} for the demo.\n\n{ex.Message}", "CertWatch", MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
-    }
-
-    private void RemoveSession(BrowserSession session)
-    {
-        session.Dispose();
-        _sessions.Remove(session);
-        _shell.Tabs.Remove(session.View);
-    }
 
     // ---- results: tray and notifications ----
 
@@ -139,14 +107,16 @@ public partial class MainWindow : Window
 
         foreach (var (title, text, important) in NotificationsFor(check, browser, site, treatment))
         {
-            _tray.Notify(title, text, important);
-            LogService.Info("notify", $"{title}: {text}");
+            var failure = _tray.Notify(title, text, important);
+            if (failure is null) LogService.Info("notify", $"{title}: {text}");
+            else LogService.Error("notify", $"Not shown ({failure}): {title}: {text}");
         }
     }
 
     /// <summary>
     /// What to pop up for a result. Inspection: whenever a site is seen inspected and hasn't been
-    /// announced this session. Also: inspection stopped, a different inspecting CA, traffic moving to
+    /// announced this session. Steering: the same, for a site steered to ZTNA without inspection.
+    /// Also: inspection stopped, a different inspecting CA, traffic moving to
     /// another interface, certificate changes, and mTLS sites.
     /// </summary>
     private IEnumerable<(string Title, string Text, bool Important)> NotificationsFor(SiteCheck check, string browser, string site, Treatment treatment)
@@ -162,6 +132,10 @@ public partial class MainWindow : Window
                           $"{site}: {path}{(c.Vendor is null ? "" : $" by {c.Vendor}")}. Issuer: {c.IssuerName}", true);
         else if (change == ChangeKind.CertificateChanged)
             yield return ($"{browser} · inspecting CA changed", $"{site} is now inspected via {c.IssuerName}.", true);
+
+        if (!PathTreatment.IsSteered(treatment) || PathTreatment.IsInspected(treatment)) _announcedSteered.Remove(key);
+        else if (_announcedSteered.Add(key) && change != ChangeKind.EgressChanged) // a move has its own pop-up below
+            yield return ($"{browser} · steered to ZTNA", $"{site} leaves via {check.Egress?.InterfaceLabel ?? "the ZTNA tunnel"}: {path}.", false);
 
         switch (change)
         {
@@ -183,7 +157,7 @@ public partial class MainWindow : Window
 
     // ---- header actions ----
 
-    private void ClearEverything()
+    private void OnClearAll(object sender, RoutedEventArgs e)
     {
         var answer = MessageBox.Show(this,
             "Clear everything?\n\n• The history for all sites in every browser\n• The log, including any log files\n\nThis can't be undone.",
@@ -192,13 +166,14 @@ public partial class MainWindow : Window
         _history.DeleteAll();
         LogService.Clear();
         _announcedInspected.Clear();
+        _announcedSteered.Clear();
         foreach (var session in _sessions) session.OnHistoryCleared();
         LogService.Info("app", "Cleared all history and the log");
     }
 
     private void OnTheme(object sender, RoutedEventArgs e)
     {
-        ThemeManager.Set(ThemeManager.Next());
+        ThemeManager.Toggle();
         _settings.Theme = ThemeManager.Mode;
         _settings.Save();
         _shell.ThemeText = $"Theme: {ThemeManager.Mode}";

@@ -1,6 +1,6 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <!-- Light theme. Generated from the colour tokens in DESIGN.md; edit the tokens, not this file. -->
+    <!-- Flashbang theme. Generated from the colour tokens in DESIGN.md; edit the tokens, not this file. -->
     <SolidColorBrush x:Key="Brand" Color="#1F2A44"/>
     <SolidColorBrush x:Key="OnBrand" Color="#FFFFFF"/>
     <SolidColorBrush x:Key="OnBrandMuted" Color="#C5CCDB"/>

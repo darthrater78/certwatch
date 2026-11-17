@@ -3,12 +3,13 @@ using System.Text.Json;
 
 namespace CertWatch.App;
 
-public enum ThemeMode { System, Light, Dark }
+// 1 and 2 match the old Light and Dark values in settings.json; 0 (old "System") or missing means "not chosen yet".
+public enum ThemeMode { Flashbang = 1, Dark = 2 }
 
 /// <summary>User preferences, kept in %LOCALAPPDATA%\CertWatch\settings.json (nothing sensitive).</summary>
 internal sealed class AppSettings
 {
-    public ThemeMode Theme { get; set; } = ThemeMode.System;
+    public ThemeMode? Theme { get; set; }
     public bool DebugLogging { get; set; }
     public bool LogToFile { get; set; }
 

@@ -22,15 +22,13 @@ public sealed class VerdictCard : Observable
         string Site, DateTimeOffset Time, Verdict Verdict, string Reason, string? Vendor, string? Issuer, string? Root,
         bool RootPublic, DateTimeOffset? NotAfter, string? Protocol, string? Fingerprint, string? RemoteIp,
         string? EgressKind, string? EgressInterface, string? EgressDescription, string? EgressRoute, bool MutualTls,
-        string Source, string? OwnIssuer, bool Differs, ChangeKind Change, IReadOnlyList<X509Certificate2> Chain);
+        string Source, ChangeKind Change, IReadOnlyList<X509Certificate2> Chain);
 
     private readonly string _browserName;
-    private readonly bool _isDemo;
 
-    public VerdictCard(string browserName, bool isDemo)
+    public VerdictCard(string browserName)
     {
         _browserName = browserName;
-        _isDemo = isDemo;
         ShowWaiting();
     }
 
@@ -83,18 +81,17 @@ public sealed class VerdictCard : Observable
         var c = check.Classification;
         var p = check.Probe;
         var o = check.Observation;
-        var source = p.Source == CertificateSource.Browser ? "exact, from the demo window" : "own connection";
         return new CardData(p.Endpoint.ToString(), o.Timestamp, c.Verdict, c.Reason, c.Vendor, c.IssuerName, c.RootName,
             c.RootIsPublic, o.NotAfter, Protocol(o.Protocol, p.CipherSuite?.ToString()), o.LeafFingerprint, p.RemoteAddress?.ToString(),
             check.Egress?.Kind.ToString(), check.Egress?.InterfaceLabel, check.Egress?.Facts.InterfaceDescription,
-            check.Egress?.RouteLabel, c.MutualTls, source, p.OwnConnectionIssuer, p.BrowserAndOwnConnectionDiffer, o.Change, p.Chain);
+            check.Egress?.RouteLabel, c.MutualTls, "own connection", o.Change, p.Chain);
     }
 
     private static CardData FromObservation(Observation o) => new(
         o.Port == 443 ? o.Host : $"{o.Host}:{o.Port}", o.Timestamp, o.Verdict, o.Reason, o.Vendor, o.Issuer, o.Root,
         o.Verdict == Verdict.NotInspected, o.NotAfter, Protocol(o.Protocol, null), o.LeafFingerprint, o.RemoteAddress,
         o.EgressKind, o.EgressInterface, null, o.EgressRoute, o.MutualTls, $"saved {o.Timestamp.LocalDateTime:MMM d HH:mm:ss}",
-        null, false, o.Change, []);
+        o.Change, []);
 
     private static string? Protocol(string? protocol, string? cipher) =>
         protocol is null ? null : cipher is null ? protocol : $"{protocol} · {cipher}";
@@ -122,7 +119,7 @@ public sealed class VerdictCard : Observable
         var egress = Presentation.Status.OfEgress(d.EgressKind);
         var egressThenLine = inspected ? StatusKind.Inspected : egress;
 
-        Path.Add(new PathNode(_browserName, _isDemo ? "demo window" : "your browser", StatusKind.Neutral, Icon("IconBrowser"), true, egress));
+        Path.Add(new PathNode(_browserName, "your browser", StatusKind.Neutral, Icon("IconBrowser"), true, egress));
         Path.Add(d.EgressKind switch
         {
             nameof(EgressKind.Tunnel) => new PathNode(d.EgressInterface ?? "ZTNA tunnel", $"tunnel · {RoutePrefix(d.EgressRoute)}", StatusKind.Steered, Icon("IconSteered"), true, egressThenLine),
@@ -135,7 +132,6 @@ public sealed class VerdictCard : Observable
         var siteStatus = d.Verdict switch { Verdict.Untrusted => StatusKind.Untrusted, Verdict.Error => StatusKind.Neutral, _ => StatusKind.Direct };
         var siteSub = d.Verdict switch
         {
-            Verdict.Inspected when d.OwnIssuer is not null => $"site serves {d.OwnIssuer}",
             Verdict.Inspected => "original certificate hidden",
             Verdict.NotInspected => $"serves {d.Issuer} · public",
             Verdict.Untrusted => $"{d.Issuer} · untrusted",
@@ -160,8 +156,6 @@ public sealed class VerdictCard : Observable
     private void BuildNotes(CardData d, string? pastInspection)
     {
         Notes.Clear();
-        if (d.Differs)
-            Notes.Add(new CardNote($"{_browserName} received a different certificate than CertWatch's own connection got ({d.OwnIssuer ?? "unknown issuer"}): the browser's traffic is handled differently from the rest of the machine.", StatusKind.Inspected));
         if (d.MutualTls)
             Notes.Add(new CardNote("mTLS: the server asks for a client certificate, so it can't be inspected and needs a bypass rule.", StatusKind.Steered));
         if (pastInspection is not null && d.Verdict != Verdict.Inspected)

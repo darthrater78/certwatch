@@ -20,17 +20,15 @@ First release.
 - Path diagram on the card (browser → tunnel or direct → inspection → site), fact grid, and notes
   for mTLS sites, earlier inspection, and browser/own-connection mismatches.
 - Per-site history (each site listed once); click a site or a history entry to show it on the card.
-- Windows notifications when inspection is found or stops, the inspecting CA changes, traffic moves
+- Windows notifications when a site is steered to ZTNA, when inspection is found or stops, the inspecting CA changes, traffic moves
   to another adapter, or a site uses mTLS; "Send test notification" in the tray menu.
-- Launch for demo: a separate browser window over a private DevTools pipe, in its own tab, with the
-  exact certificate the browser received and every open tab checked.
-- Log window with debug detail and optional file logging; "Clear everything" for all history and the log.
-- Light and dark themes (or follow Windows), app icon, root export (.cer, .pem or full chain).
+- Log window with debug detail and optional file logging. "Clear browser" in each tab clears that
+  browser's history; "Clear all" in the header clears every browser's history and the log.
+- Two themes, Flashbang (bright) and Dark, switched from the header (the first run matches Windows); app icon, root export (.cer, .pem or full chain).
 
 ### Security
 
 - History encrypted at rest (AES-256-GCM, master key protected by Windows DPAPI).
-- No debugging port: the demo browser is reached over pipes only CertWatch holds.
 - Self-contained build bundles the .NET 10.0.15 security release.
 
 ### Changed

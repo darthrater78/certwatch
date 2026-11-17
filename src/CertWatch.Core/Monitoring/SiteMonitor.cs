@@ -141,10 +141,12 @@ public sealed class SiteMonitor : IAsyncDisposable
             _history.Touch(previous.Id, probe.Timestamp);
             observation = observation with { Id = previous.Id };
         }
-        else
+        else if (previous is not null || classification.Verdict != Verdict.Error)
         {
             observation = _history.Add(observation);
         }
+        // Otherwise it's a site that has never answered (a typo, a dead host): shown, but not saved,
+        // so it doesn't become a permanent row in Sites.
 
         return new SiteCheck(probe, classification, observation, egress);
     }

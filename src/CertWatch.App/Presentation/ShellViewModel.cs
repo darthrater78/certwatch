@@ -27,6 +27,6 @@ internal sealed class ShellViewModel : Observable
     private bool _hasTabs;
     public bool HasTabs { get => _hasTabs; set => Set(ref _hasTabs, value); }
 
-    private string _themeText = "Theme: System";
+    private string _themeText = "Theme";
     public string ThemeText { get => _themeText; set => Set(ref _themeText, value); }
 }

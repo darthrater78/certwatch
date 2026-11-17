@@ -7,7 +7,7 @@ using Xunit;
 namespace CertWatch.Core.Tests;
 
 /// <summary>
-/// Guards the App's theme dictionaries. A key defined both in a theme (Light/Dark) and in Styles.xaml
+/// Guards the App's theme dictionaries. A key defined both in a theme (Flashbang/Dark) and in Styles.xaml
 /// makes {DynamicResource Key} inside Styles.xaml resolve to the wrong object: v2026.11.16 crashed at
 /// startup because Style "PrimaryButton" shadowed brush "PrimaryButton".
 /// </summary>
@@ -32,7 +32,7 @@ public class ThemeResourceTests
             .ToArray();
 
     [Theory]
-    [InlineData("Light.xaml")]
+    [InlineData("Flashbang.xaml")]
     [InlineData("Dark.xaml")]
     public void ThemeKeysDoNotCollideWithStyleKeys(string theme)
     {
@@ -41,11 +41,11 @@ public class ThemeResourceTests
     }
 
     [Fact]
-    public void LightAndDarkDefineTheSameKeys()
+    public void FlashbangAndDarkDefineTheSameKeys()
     {
-        var light = Keys("Light.xaml").ToHashSet();
+        var light = Keys("Flashbang.xaml").ToHashSet();
         var dark = Keys("Dark.xaml").ToHashSet();
         Assert.True(light.SetEquals(dark),
-            $"only in Light: {string.Join(", ", light.Except(dark))}; only in Dark: {string.Join(", ", dark.Except(light))}");
+            $"only in Flashbang: {string.Join(", ", light.Except(dark))}; only in Dark: {string.Join(", ", dark.Except(light))}");
     }
 }

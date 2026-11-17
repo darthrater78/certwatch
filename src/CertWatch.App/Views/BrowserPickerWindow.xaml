@@ -10,6 +10,7 @@
         <Style x:Key="PickerRow" TargetType="CheckBox">
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Focusable" Value="True"/>
+            <Setter Property="Foreground" Value="{DynamicResource OnSurface}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="CheckBox">
@@ -26,7 +27,8 @@
                                     <Path x:Name="Mark" Data="M3,8 L6.5,11.5 L13,4.5" Stroke="{DynamicResource OnPrimaryButton}"
                                           StrokeThickness="2" Visibility="Collapsed" Margin="-1"/>
                                 </Border>
-                                <TextBlock Grid.Column="1" Text="{Binding Name}" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Text="{Binding Name}" Margin="12,0,0,0" VerticalAlignment="Center"
+                                           Foreground="{TemplateBinding Foreground}"/>
                                 <Border x:Name="Chip" Grid.Column="2" CornerRadius="2" Padding="6,1" VerticalAlignment="Center"
                                         Background="{DynamicResource NeutralTint}">
                                     <TextBlock x:Name="ChipText" Text="Running" FontSize="11" Foreground="{DynamicResource OnNeutralTint}"/>
@@ -63,8 +65,8 @@
         <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,12"
                    Text="Tick as many as you like. CertWatch reads the address bar of these browsers only, and never sits in their traffic."/>
 
-        <Border BorderBrush="{DynamicResource LineStrong}" BorderThickness="1,1,1,0" CornerRadius="4" ClipToBounds="True">
-            <ItemsControl x:Name="List" ItemsSource="{Binding}" KeyboardNavigation.TabNavigation="Continue"
+        <Border BorderBrush="{DynamicResource LineStrong}" BorderThickness="1" CornerRadius="4" Padding="0,0,0,0" Background="{DynamicResource Surface}">
+            <ItemsControl x:Name="List" ItemsSource="{Binding}" KeyboardNavigation.TabNavigation="Continue" Margin="0,0,0,-1"
                           AutomationProperties.Name="Browsers to monitor">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>

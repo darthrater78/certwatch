@@ -77,7 +77,10 @@ public partial class MainWindow : Window
         UpdateEmptyState();
         // First run: nothing is monitored yet, so ask straight away (several can be ticked before Apply).
         if (_settings.MonitoredBrowsers is null && options.Browsers.Count == 0)
+        {
+            LogService.Info("app", "First run: asking which browsers to monitor");
             ContentRendered += (_, _) => Dispatcher.BeginInvoke(ChooseBrowsers);
+        }
         ScanForBrowsers();
         _browserScan.Tick += (_, _) => ScanForBrowsers();
         _browserScan.Start();

@@ -7,8 +7,9 @@ All notable changes to CertWatch. Versions are the UTC date of the release.
 ### Added
 
 - Browser picker (first run, and **Browsers…** in the header): tick any number of browsers, then
-  apply. The choice is saved; dropping one stops reading its address bar and removes its tab,
-  keeping its history.
+  apply. Every chosen browser gets a tab right away, marked **Not running** until it starts. The
+  choice is saved; dropping one stops reading its address bar and removes its tab, keeping its
+  history.
 
 ### Changed
 

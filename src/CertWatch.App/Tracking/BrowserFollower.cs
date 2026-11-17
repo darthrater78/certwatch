@@ -28,7 +28,8 @@ internal sealed class BrowserFollower : IDisposable
 
     private void Run()
     {
-        string? previous = null;
+        // Not a possible address, so the first read is always reported (including "no window").
+        string? previous = "\0";
         while (!_stopping)
         {
             try

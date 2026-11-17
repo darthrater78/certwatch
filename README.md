@@ -91,8 +91,9 @@ and issuers.
 Run `CertWatch.exe`. Only one copy runs; starting it again brings the window forward. On first run
 it monitors nothing and asks which browsers to watch: tick as many as you like (Edge, Chrome, Brave,
 Island, Vivaldi, Opera, Firefox) and press **Monitor**. Change it any time with **Browsers…** in the
-header. Your choice is saved. Each chosen browser gets a tab while it's running; the tab stays after
-it closes, and each follows its own browser, even in the background. Dropping a browser in
+header. Your choice is saved. Each chosen browser gets a tab straight away, running or not (a closed
+browser's tab says **Not running** and still shows its history), and each follows its own browser,
+even in the background. Dropping a browser in
 **Browsers…** stops reading its address bar right away and removes its tab. Its history is kept and
 comes back if you pick it again. Browsers you didn't pick are never read. Each tab header shows that
 browser's current site and verdict.

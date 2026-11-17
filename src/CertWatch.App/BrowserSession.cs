@@ -42,8 +42,7 @@ internal sealed class BrowserSession : IDisposable
 
         _follower = new BrowserFollower(browser, _monitor, _ => true);
         // Only the host:port that will be checked is logged, never the full address (paths and query strings can hold tokens).
-        _follower.AddressRead += text => LogService.Debug(browser.Id, () =>
-            $"Address bar: {(text is null ? "(no window)" : AddressParser.Parse(text)?.ToString() ?? "(not an https site)")}");
+        _follower.AddressRead += OnAddressRead;
         LogService.Info(browser.Id, $"Following {browser.DisplayName}");
     }
 
@@ -54,11 +53,24 @@ internal sealed class BrowserSession : IDisposable
 
     public void RecheckNow() => _monitor.RecheckNow();
 
+    // Background thread. Raised before the monitor hears about the site, and the only place the
+    // no-site states are shown, so "not running" and "no HTTPS page" can be told apart.
+    private void OnAddressRead(string? text)
+    {
+        var site = text is null ? null : AddressParser.Parse(text);
+        LogService.Debug(Browser.Id, () => $"Address bar: {(text is null ? "(no window)" : site?.ToString() ?? "(not an https site)")}");
+        if (site is not null) return; // OnSiteChanged shows it
+        _dispatcher.BeginInvoke(() =>
+        {
+            if (text is null) View.ShowNotRunning();
+            else View.ShowNoSite();
+        });
+    }
+
     private void OnSiteChanged(SiteEndpoint? site)
     {
         LogService.Info(Browser.Id, site is { } s ? $"Now on {s}" : "No HTTPS page in focus");
         if (site is { } x) View.ShowChecking(x);
-        else View.ShowNoSite();
     }
 
     private void OnChecked(SiteCheck check)

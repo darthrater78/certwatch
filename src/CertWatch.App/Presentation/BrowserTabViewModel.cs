@@ -134,6 +134,17 @@ public sealed class BrowserTabViewModel : Observable
         Card.ShowWaiting();
     }
 
+    /// <summary>The browser is chosen but has no window open; its history stays browsable.</summary>
+    public void ShowNotRunning()
+    {
+        _liveSite = null;
+        _lastLive = null;
+        CardNote = "";
+        Status = StatusKind.Neutral;
+        TabStatus = "Not running";
+        Card.ShowWaiting($"Start {Browser.DisplayName} and CertWatch follows its active tab.", $"{Browser.DisplayName} isn't running");
+    }
+
     public void ShowChecking(SiteEndpoint site)
     {
         _liveSite = site;

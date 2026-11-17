@@ -8,7 +8,7 @@ namespace CertWatch.Core.Tests;
 
 /// <summary>
 /// Guards the App's theme dictionaries. A key defined both in a theme (Flashbang/Dark) and in Styles.xaml
-/// makes {DynamicResource Key} inside Styles.xaml resolve to the wrong object: v2026.11.16 crashed at
+/// makes {DynamicResource Key} inside Styles.xaml resolve to the wrong object: an early build crashed at
 /// startup because Style "PrimaryButton" shadowed brush "PrimaryButton".
 /// </summary>
 public class ThemeResourceTests

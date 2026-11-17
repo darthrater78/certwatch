@@ -2,7 +2,7 @@
 
 All notable changes to CertWatch. Versions are the UTC date of the release.
 
-## [2026.11.16] - 2026-11-16
+## [2026.11.17] - 2026-11-17
 
 First release.
 
@@ -22,18 +22,18 @@ First release.
 - Per-site history (each site listed once); click a site or a history entry to show it on the card.
 - Pop-ups (CertWatch's own, so Do not disturb can't hide them) when a site is steered to ZTNA, when
   inspection is found or stops, the inspecting CA changes, traffic moves to another adapter, or a
-  site uses mTLS; "Show test pop-up" in the tray menu. They stay until dismissed by default;
-  "Pop-ups" in the header switches to 10 s, 30 s or 1 min.
+  site uses mTLS; clicking one opens that site in its browser's tab. They stay until dismissed by
+  default; "Pop-ups" in the header switches to 10 s, 30 s or 1 min. "Show test pop-up" is in the
+  tray menu.
 - Log window with debug detail and optional file logging. "Clear browser" in each tab clears that
   browser's history; "Clear all" in the header clears every browser's history and the log.
-- Two themes, Flashbang (bright) and Dark, switched from the header (the first run matches Windows); app icon, root export (.cer, .pem or full chain).
+- Two themes, Flashbang (bright) and Dark, switched from the header (the first run matches
+  Windows); app icon; root export (.cer, .pem or full chain).
+- One self-contained, compressed exe (about 63 MB) that needs no installer or .NET install.
 
 ### Security
 
 - History encrypted at rest (AES-256-GCM, master key protected by Windows DPAPI).
 - Self-contained build bundles the .NET 10.0.15 security release.
-
-### Changed
-
-- Smaller download: the single-file exe is compressed, bundles only English framework resources,
-  and no longer carries WinForms or the WinRT SDK (the tray icon uses Win32 directly).
+- Each release exe has a signed build provenance attestation (`gh attestation verify`); pull
+  requests that add a vulnerable package fail dependency review.

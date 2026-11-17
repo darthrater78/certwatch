@@ -91,6 +91,8 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
+      id-token: write       # build provenance: signs the attestation with the workflow's identity
+      attestations: write   # build provenance: stores the attestation on the repo
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -118,6 +120,13 @@ jobs:
 
       - name: Build the Windows release
         run: bash scripts/build.sh publish
+
+      # Signed record that this exe was built by this workflow from this commit.
+      # Check a download with: gh attestation verify CertWatch-<tag>-win-x64.exe --repo darthrater78/certwatch
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: artifacts/CertWatch-v*-win-x64.exe
 
       - name: Extract release notes
         run: |

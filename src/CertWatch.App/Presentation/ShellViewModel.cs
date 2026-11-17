@@ -13,7 +13,7 @@ internal sealed class ShellViewModel : Observable
         Version = informational.Split('+')[0];
     }
 
-    /// <summary>The app's date version (e.g. 2026.11.16), from the build.</summary>
+    /// <summary>The app's date version (e.g. 2026.11.17), from the build.</summary>
     public string Version { get; }
     public string VersionText => $"v{Version}";
     public Uri RepoUrl => new(Repository);

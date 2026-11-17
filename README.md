@@ -2,7 +2,7 @@
 
 <img src="src/CertWatch.App/Assets/CertWatch-256.png" width="64" align="right" alt="CertWatch icon">
 
-**[GitHub](https://github.com/darthrater78/certwatch)** · **[Release notes for v2026.11.16](https://github.com/darthrater78/certwatch/releases/tag/v2026.11.16)** · [Changelog](CHANGELOG.md)
+**[GitHub](https://github.com/darthrater78/certwatch)** · **[Release notes for v2026.11.17](https://github.com/darthrater78/certwatch/releases/tag/v2026.11.17)** · [Changelog](CHANGELOG.md)
 
 A Windows app for ZTNA demos. For every browser that's running, it shows, live, whether the site in
 the active tab is **steered into the ZTNA tunnel** and whether its certificate was **replaced for
@@ -65,8 +65,8 @@ In a tab:
   history.
 
 In the header: **GitHub** and **Release notes** links, **Clear all…** (every browser's history and
-the log), **Log**, and **Theme** (Flashbang, the bright
-theme, or Dark; the first run matches Windows). The **Log** window has **Debug detail**
+the log), **Log**, **Pop-ups** (how long pop-ups stay) and **Theme** (Flashbang, the bright theme,
+or Dark; the first run matches Windows). The **Log** window has **Debug detail**
 (address-bar reads, routes and issuers) and **Write log to file** (off by default), plus Open log
 folder, Copy all and Clear log.
 
@@ -127,17 +127,17 @@ How CertWatch is built with regard to security, in statements you can check agai
 
 - **What it reads.** The active tab's address comes from the browser's address bar through Windows
   UI Automation (read-only). Site certificates come from CertWatch's own TLS connection to that
-  site. Routes come from
-  Windows' routing table (`GetBestRoute2`). All of it is treated as untrusted data: addresses are
-  parsed and only `https` hosts are checked, and pop-up text is shown as plain
-  strings, never as markup.
+  site. Routes come from Windows' routing table (`GetBestRoute2`). All of it is treated as
+  untrusted data: addresses are parsed and only `https` hosts are checked, and pop-up text is shown
+  as plain strings, never as markup.
 - **What it trusts.** Nothing it observes. CertWatch's own TLS connection accepts any certificate
   on purpose, because its job is to record what was presented. It sends no application data over
   that connection, and it requires TLS 1.2 or 1.3. Verdicts compare the chain against the bundled
   Mozilla root list (`src/CertWatch.Core/Resources/public-roots.pem`, from curl.se), matched by
   public key, and against Certificate Transparency proofs.
 - **Privileges.** Runs as the signed-in user (`asInvoker`), never elevated. It writes only under
-  `%LOCALAPPDATA%\CertWatch`, and nothing to the registry. P/Invoke calls load system DLLs from
+  `%LOCALAPPDATA%\CertWatch` (plus an exported root, wherever you choose to save it), and nothing
+  to the registry; it reads one registry value, your Windows light/dark setting, on first run. P/Invoke calls load system DLLs from
   System32 only.
 - **What it stores, and how it's protected (encryption at rest).**
   - `history.db`: sites visited per browser, with IPs, certificate details and egress. Everything
@@ -149,7 +149,10 @@ How CertWatch is built with regard to security, in statements you can check agai
     under the current user's account, so only that account on that PC can unwrap it. History that
     can't be decrypted (for example, copied from another account) is set aside and a fresh database
     started.
-  - `window.json`, `settings.json`: window position, theme and log options, plain (not sensitive).
+  - `window.json`, `settings.json`: window position, theme, pop-up duration and log options, plain
+    (not sensitive).
+  - `crash.log`: written only if CertWatch hits an unexpected error. Plain text: the error and where
+    it happened, which can include a site's name. Capped at 1 MB; delete it any time.
   - `logs\certwatch-<date>.log`: written **only** when you turn on **Write log to file**. Plain text,
     and it names the sites you visit, so it's off by default; **Clear log** and **Clear all**
     delete these files. Without it, the log lives only in memory (last 5,000 entries).
@@ -160,10 +163,17 @@ How CertWatch is built with regard to security, in statements you can check agai
   project stays on the .NET 10 LTS line, and the self-contained build pins the newest .NET security
   patch (`RuntimePatch` in `CertWatch.App.csproj`). The Mozilla root bundle is refreshed from
   curl.se by hand; check its date before each release. `CertWatch.exe` is not code-signed yet
-  (accepted for an internal demo tool, 2026-11-16).
+  (accepted for an internal demo tool, 2026-11-16), but every release carries a signed **build
+  provenance** attestation: `gh attestation verify CertWatch-v<version>-win-x64.exe --repo
+  darthrater78/certwatch` proves the exe was built by the release workflow from the tagged commit.
+  Pull requests that add a package with a High or Critical advisory fail **dependency review**, and
+  GitHub **push protection** blocks pushes that contain secrets.
 
 ### Changes
 
+- 2026-11-17: Releases get a build provenance attestation; pull requests that change packages run
+  dependency review. `crash.log` (plain text, written only on a crash) is listed above; keeping it
+  readable was a deliberate choice, since the full error message is what makes a crash fixable.
 - 2026-11-16: Added the log. It's in memory by default; writing it to disk is opt-in, and "Clear
   all" deletes it along with all history.
 - 2026-11-16: History is encrypted at rest (AES-256-GCM, key protected by DPAPI). Plaintext history
@@ -171,7 +181,8 @@ How CertWatch is built with regard to security, in statements you can check agai
 - 2026-11-16: Removed Launch for demo. CertWatch no longer starts a browser or talks to one over
   DevTools, so that whole channel (and the separate browser profile it kept) is gone.
 - 2026-11-16: Alerts are CertWatch's own pop-up windows instead of Windows notifications. They
-  show text as plain text, take no input other than a click to open CertWatch, and never take focus.
+  show text as plain text, take no input other than a click (which opens that site in CertWatch) or
+  ✕, and never take focus.
 - 2026-11-16: Notifications use Windows' built-in API instead of an unmaintained package
   (Microsoft.Toolkit.Uwp.Notifications, last released 2022).
 - 2026-11-16: The tray icon and notifications call Windows directly (`Shell_NotifyIcon`) instead of
@@ -180,7 +191,8 @@ How CertWatch is built with regard to security, in statements you can check agai
 - 2026-11-16: The self-contained build bundles .NET 10.0.15 (a security release) instead of
   10.0.14. Microsoft.Data.Sqlite moved from the .NET 11 (STS) line to 10.0.15 (LTS).
 - 2026-11-16: CertWatch's own TLS connection now requires TLS 1.2+. P/Invoke is limited to System32.
-  A browser path found in the registry is only used if it's that browser's own program file.
+  A browser path found in the registry was only used if it was that browser's own program file
+  (that lookup was later removed with Launch for demo).
 
 ## Build (Linux or Windows)
 
@@ -201,12 +213,17 @@ anywhere.
 ### CI and releases
 
 - **CI** (`.github/workflows/ci.yml`) runs `scripts/build.sh` on every push and pull request, checks
-  for vulnerable packages, and uploads the Windows exe itself, not zipped, as an artifact (kept 14 days). Docs-only
-  changes skip the build.
+  for vulnerable packages, and uploads the Windows exe itself, not zipped, as an artifact (kept 14
+  days). Docs-only changes skip the build.
 - **Release** (`.github/workflows/release.yml`) runs when a `v*` tag is pushed. It checks that the tag
   is on `main` (pre-release tags such as `-dev.1` excepted), that CI passed for that commit, and that
   the tag matches `<Version>` in `CertWatch.App.csproj`. It then builds the exe and publishes the
   GitHub release with the matching `CHANGELOG.md` section as notes. Pre-release tags publish as
   pre-releases.
+- The release also attaches a signed **build provenance** attestation to the exe
+  (`gh attestation verify`).
+- **Dependency review** (`.github/workflows/dependency-review.yml`) fails a pull request that adds a
+  package or action with a High or Critical advisory. It runs only when a project file or workflow
+  changes.
 - **Lint workflows** (`.github/workflows/lint-workflows.yml`) runs actionlint on workflow changes.
 - Dependabot keeps the NuGet packages and the action pins current.

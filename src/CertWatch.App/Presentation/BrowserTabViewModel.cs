@@ -243,6 +243,12 @@ public sealed class BrowserTabViewModel : Observable
     }
 
     /// <summary>Selects a row from code (following the live site), bypassing the tab-switch null guard.</summary>
+    /// <summary>Selects a site's row (from a pop-up click). A site with no row yet is left alone.</summary>
+    public void ShowSite(SiteEndpoint site)
+    {
+        if (Sites.FirstOrDefault(r => r.Endpoint == site) is { } row) SelectRow(row);
+    }
+
     private void SelectRow(SiteRow? row)
     {
         if (row is not null) { SelectedSite = row; return; }

@@ -75,7 +75,8 @@ from the tray menu, which also has **Show test pop-up**.
 
 Pop-ups are CertWatch's own small cards in the bottom-right corner, not Windows notifications, so
 Do not disturb (which Windows often turns on while you share your screen) doesn't hide them. By
-default they stay until you dismiss them (✕) or click them, which opens CertWatch. **Pop-ups** in the
+default they stay until you dismiss them (✕) or click them; a click opens CertWatch on that
+browser's tab with the site selected, so its card and history are right there. **Pop-ups** in the
 header switches between until dismissed, 10 s, 30 s and 1 min; a timed pop-up waits while the mouse
 is over it.
 

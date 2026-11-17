@@ -8,7 +8,7 @@
         FontFamily="{StaticResource UiFont}" FontSize="13" Cursor="Hand"
         AutomationProperties.LiveSetting="Assertive">
     <!-- CertWatch's own notification (DESIGN.md: verdict tile + text). Shown instead of a Windows
-         notification so Do not disturb during a screen share can't hide it. Click opens CertWatch. -->
+         notification so Do not disturb during a screen share can't hide it. Click opens its site in CertWatch. -->
     <DockPanel Margin="12,10,8,12">
         <Border DockPanel.Dock="Left" Style="{StaticResource StatusSolid}" Width="40" Height="40" CornerRadius="4"
                 Margin="0,2,12,0" VerticalAlignment="Top">
@@ -20,7 +20,7 @@
         <StackPanel>
             <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" TextWrapping="Wrap"/>
             <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Margin="0,3,0,0"/>
-            <TextBlock Text="CertWatch · click to open" Style="{StaticResource Label}" Margin="0,6,0,0"/>
+            <TextBlock Text="{Binding Hint}" Style="{StaticResource Label}" Margin="0,6,0,0"/>
         </StackPanel>
     </DockPanel>
 </Window>

@@ -1,10 +1,17 @@
 using System.Windows;
 using CertWatch.App.Views;
+using CertWatch.Core.Browsers;
 
 namespace CertWatch.App.Presentation;
 
-/// <summary>What one pop-up shows. <see cref="Status"/> picks the tile's colour and symbol.</summary>
-public sealed record PopupContent(string Title, string Text, StatusKind Status);
+/// <summary>
+/// What one pop-up shows. <see cref="Status"/> picks the tile's colour and symbol. When it is about a
+/// site, <see cref="BrowserId"/> and <see cref="Site"/> say which entry clicking it opens.
+/// </summary>
+public sealed record PopupContent(string Title, string Text, StatusKind Status, string? BrowserId = null, SiteEndpoint? Site = null)
+{
+    public string Hint => Site is { } site ? $"CertWatch · click to show {site}" : "CertWatch · click to open";
+}
 
 /// <summary>
 /// CertWatch's own notifications: cards in the bottom-right corner of the primary screen's work area,
@@ -36,15 +43,15 @@ internal sealed class PopupNotifier
 
     private readonly List<PopupWindow> _open = [];
 
-    /// <summary>Raised when a pop-up is clicked.</summary>
-    public event Action? OpenRequested;
+    /// <summary>Raised when a pop-up is clicked, with what it was about.</summary>
+    public event Action<PopupContent>? OpenRequested;
 
     public void Show(PopupContent content)
     {
         while (_open.Count >= MaxVisible) _open[0].Close(); // Closed handler removes it
 
         var popup = new PopupWindow(content, Lifetime);
-        popup.Opened += () => OpenRequested?.Invoke();
+        popup.Opened += () => OpenRequested?.Invoke(content);
         popup.Closed += (_, _) =>
         {
             _open.Remove(popup);

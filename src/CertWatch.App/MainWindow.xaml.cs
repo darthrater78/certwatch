@@ -57,7 +57,7 @@ public partial class MainWindow : Window
         _tray.OpenRequested += () => Dispatcher.BeginInvoke(ShowFromTray); // also raised by clicking a notification
         _tray.RecheckRequested += () => SessionFor(_shell.SelectedTab)?.RecheckNow();
         _tray.ExitRequested += ExitApp;
-        _popups.OpenRequested += ShowFromTray;
+        _popups.OpenRequested += OpenPopupEntry;
         _popups.Lifetime = PopupNotifier.LifetimeFor(_settings.PopupSeconds);
         _shell.PopupText = PopupNotifier.Describe(_settings.PopupSeconds);
         _tray.TestNotificationRequested += () =>
@@ -111,7 +111,7 @@ public partial class MainWindow : Window
 
         foreach (var (title, text) in NotificationsFor(check, browser, site, treatment))
         {
-            _popups.Show(new PopupContent(title, text, status));
+            _popups.Show(new PopupContent(title, text, status, session.Browser.Id, check.Probe.Endpoint));
             LogService.Info("notify", $"{title}: {text}");
         }
     }
@@ -207,6 +207,16 @@ public partial class MainWindow : Window
         if (e.Uri.Scheme == Uri.UriSchemeHttps && e.Uri.AbsoluteUri.StartsWith(ShellViewModel.Repository, StringComparison.Ordinal))
             Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
         e.Handled = true;
+    }
+
+    /// <summary>A pop-up was clicked: bring CertWatch forward on that browser's tab with the site selected.</summary>
+    private void OpenPopupEntry(PopupContent popup)
+    {
+        ShowFromTray();
+        if (popup.Site is not { } site || _sessions.FirstOrDefault(s => s.Browser.Id == popup.BrowserId) is not { } session) return;
+        _shell.SelectedTab = session.View;
+        // After the tab switch has rebound the tables, so the grid doesn't push its old selection back.
+        Dispatcher.BeginInvoke(() => session.View.ShowSite(site), System.Windows.Threading.DispatcherPriority.Background);
     }
 
     internal void ShowFromTray()

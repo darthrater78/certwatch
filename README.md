@@ -15,17 +15,17 @@ These are illustrations drawn from the app's own theme colours and layout, with 
 data (Contoso, Fabrikam and Adatum are fictitious names), not captures of a real session.
 
 **Steered to ZTNA, not inspected (Dark).** Edge on `crm.fabrikam.com`: traffic leaves through the
-Island Private Access tunnel, and the chain ends at a public root, so the certificate is the site's
-own. The path reads Edge → Island Private Access → site, and the facts show the route and the IP
+ZTNA adapter's tunnel, and the chain ends at a public root, so the certificate is the site's
+own. The path reads Edge → ZTNA Adapter → site, and the facts show the route and the IP
 actually connected to.
 
 ![CertWatch in the Dark theme, showing a site steered to ZTNA and not inspected](docs/screenshots/dark-steered.png)
 
 **Steered and inspected (Flashbang).** Brave on `news.adatum.com`: the certificate was replaced by
-Island's inspection CA, chaining to a private root this PC trusts, so the card turns violet, names
-the vendor, and adds the inspection step to the path.
+an inspection CA chaining to a private root this PC trusts, so the card turns violet and adds the
+inspection step to the path. (When CertWatch recognises the inspecting vendor, it names it.)
 
-![CertWatch in the Flashbang theme, showing a site steered to ZTNA and inspected by Island](docs/screenshots/flashbang-inspected.png)
+![CertWatch in the Flashbang theme, showing a site steered to ZTNA and inspected](docs/screenshots/flashbang-inspected.png)
 
 **Pop-ups.** CertWatch's own cards in the corner of the screen when a site is steered, inspection
 is found, or traffic moves. Do not disturb doesn't hide them, so the audience sees them during a

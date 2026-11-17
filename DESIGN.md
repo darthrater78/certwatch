@@ -218,7 +218,9 @@ Flat. Depth comes from tone and 1px borders (`line`), never shadows. The only la
 
 ## Components
 
-- App header: slate bar, 36px, icon + name + version + GitHub and release-notes links, then Clear all…, Log, Pop-ups, Theme.
+- App header: slate bar, 36px, icon + name + version + GitHub and release-notes links, then Browsers…, Clear all…, Log, Pop-ups, Theme.
+- Browsers… panel: drops below its header button; SurfaceAlt with a 1px LineStrong border and 4px corners, 12px/8px padding; semibold "Monitor these browsers" title, one themed checkbox per browser, then a muted 11px note that unticked browsers aren't read. Closes on any click outside.
+- Empty page (no tabs): centred muted 15px line. With nothing ticked (first run) it says to choose browsers, and the same checkboxes sit under it; once something is ticked it names the browsers being waited for.
 - Verdict card: tinted header with the 40px status tile, site and context line (11px), verdict headline (20px), actions on the right; path diagram of 24px-icon nodes joined by 2px status-coloured arrows; 4-column fact grid (label 11px muted, value 13px, mono for technical values).
 - Pop-up: 380px card in the bottom-right corner of the work area, Surface with a 1px LineStrong border and rounded corners; 40px status tile, title 14px semibold, text 13px, "CertWatch · click to show <site>" label (a click opens that browser's tab with the site selected); dismiss ✕. Up to 4 stack upward, newest at the bottom. They stay until dismissed by default; the header's "Pop-ups" button cycles until dismissed / 10 s / 30 s / 1 min.
 - Chips: icon + short text ("ZTNA · inspected", "ZTNA · steered", "Direct", "Untrusted").

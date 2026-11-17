@@ -41,7 +41,9 @@ internal sealed class BrowserSession : IDisposable
         View.RecheckRequested += _monitor.RecheckNow;
 
         _follower = new BrowserFollower(browser, _monitor, _ => true);
-        _follower.AddressRead += text => LogService.Debug(browser.Id, () => $"Address bar: {text ?? "(no window)"}");
+        // Only the host:port that will be checked is logged, never the full address (paths and query strings can hold tokens).
+        _follower.AddressRead += text => LogService.Debug(browser.Id, () =>
+            $"Address bar: {(text is null ? "(no window)" : AddressParser.Parse(text)?.ToString() ?? "(not an https site)")}");
         LogService.Info(browser.Id, $"Following {browser.DisplayName}");
     }
 

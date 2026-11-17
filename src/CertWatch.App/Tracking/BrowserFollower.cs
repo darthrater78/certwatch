@@ -23,7 +23,7 @@ internal sealed class BrowserFollower : IDisposable
         _thread.Start();
     }
 
-    /// <summary>Raw address-bar text, for the window's "Address bar" line (background thread).</summary>
+    /// <summary>Raw address-bar text (background thread). Subscribers must not log or store it as-is: it can hold paths and query strings.</summary>
     public event Action<string?>? AddressRead;
 
     private void Run()

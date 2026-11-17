@@ -17,8 +17,9 @@ using CertWatch.Core.Trust;
 namespace CertWatch.App;
 
 /// <summary>
-/// One window, one tab per browser. Browsers are added automatically
-/// when they start running; a tab stays after its browser closes so its history remains visible.
+/// One window, one tab per browser. Only browsers the user ticked in "Browsers…" (or named with
+/// --browser/--process) are monitored: each gets a tab once it's running, and the tab stays after the
+/// browser closes so its history remains visible. Unticked browsers' address bars are never read.
 /// </summary>
 public partial class MainWindow : Window
 {
@@ -32,6 +33,8 @@ public partial class MainWindow : Window
     private readonly PopupNotifier _popups = new();
     private readonly WindowsRouteLookup _routes = new();
     private readonly List<BrowserSession> _sessions = [];
+    // Catalog ids the user ticked; saved in settings.json. Empty until the first choice.
+    private readonly HashSet<string> _monitored = new(StringComparer.OrdinalIgnoreCase);
     private readonly DispatcherTimer _browserScan = new() { Interval = TimeSpan.FromSeconds(3) };
     // Browser|site pairs already announced as inspected this session, so each gets one pop-up.
     private readonly HashSet<string> _announcedInspected = [];
@@ -68,7 +71,16 @@ public partial class MainWindow : Window
         };
         _tray.SetState(StatusKind.Neutral, "CertWatch: waiting for a browser");
 
+        _monitored.UnionWith(BrowserSelection.Normalize(_settings.MonitoredBrowsers));
+        foreach (var b in BrowserCatalog.All)
+        {
+            var choice = new BrowserChoice(b.Id, b.DisplayName, _monitored.Contains(b.Id));
+            choice.Toggled += OnBrowserToggled;
+            _shell.Choices.Add(choice);
+        }
+        // Browsers named on the command line are an explicit choice for this run (not saved).
         foreach (var b in options.Browsers) AddSession(b);
+        UpdateEmptyState();
         ScanForBrowsers();
         _browserScan.Tick += (_, _) => ScanForBrowsers();
         _browserScan.Start();
@@ -78,10 +90,52 @@ public partial class MainWindow : Window
     {
         foreach (var browser in BrowserCatalog.All)
         {
-            if (_sessions.Any(s => s.Browser.Id == browser.Id)) continue;
+            if (!_monitored.Contains(browser.Id) || _sessions.Any(s => s.Browser.Id == browser.Id)) continue;
             if (BrowserSession.IsRunning(browser)) AddSession(browser);
         }
     }
+
+    private void OnBrowserToggled(BrowserChoice choice)
+    {
+        if (choice.IsMonitored) _monitored.Add(choice.Id);
+        else _monitored.Remove(choice.Id);
+        _settings.MonitoredBrowsers = BrowserSelection.Normalize(_monitored).ToList();
+        _settings.Save();
+        LogService.Info("app", $"{choice.Name}: {(choice.IsMonitored ? "monitored" : "not monitored")}");
+
+        if (choice.IsMonitored) ScanForBrowsers();
+        else if (_sessions.FirstOrDefault(s => s.Browser.Id == choice.Id) is { } session) RemoveSession(session);
+        UpdateEmptyState();
+    }
+
+    /// <summary>Stops reading that browser's address bar and removes its tab. Its history stays saved.</summary>
+    private void RemoveSession(BrowserSession session)
+    {
+        session.Checked -= OnChecked;
+        // Stopping the follower waits for its poll to finish; keep that wait off the UI thread.
+        _ = Task.Run(session.Dispose);
+        _sessions.Remove(session);
+        var prefix = $"{session.Browser.DisplayName}|";
+        _announcedInspected.RemoveWhere(k => k.StartsWith(prefix, StringComparison.Ordinal));
+        _announcedSteered.RemoveWhere(k => k.StartsWith(prefix, StringComparison.Ordinal));
+        var wasSelected = _shell.SelectedTab == session.View;
+        _shell.Tabs.Remove(session.View);
+        if (wasSelected) _shell.SelectedTab = _shell.Tabs.FirstOrDefault();
+        _shell.HasTabs = _shell.Tabs.Count > 0;
+        if (!_shell.HasTabs) _tray.SetState(StatusKind.Neutral, "CertWatch: waiting for a browser");
+    }
+
+    private void UpdateEmptyState()
+    {
+        _shell.AnyChosen = _monitored.Count > 0 || _sessions.Count > 0;
+        var names = _shell.Choices.Where(c => c.IsMonitored).Select(c => c.Name).ToList();
+        _shell.EmptyText = names.Count == 0
+            ? "Choose which browsers CertWatch monitors. It reads the address bar only of the browsers you tick."
+            : $"Monitoring {string.Join(", ", names)}. None of them is running: open one and its tab appears here.";
+    }
+
+    // Opens only: a click while it's open first closes it (StaysOpen=False), so toggling would reopen-then-close.
+    private void OnBrowsers(object sender, RoutedEventArgs e) => _shell.BrowsersOpen = true;
 
     private BrowserSession AddSession(BrowserDefinition browser)
     {

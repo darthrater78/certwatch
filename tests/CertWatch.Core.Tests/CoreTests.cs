@@ -228,3 +228,25 @@ public class HistoryStoreTests
         }
     }
 }
+
+public class BrowserSelectionTests
+{
+    [Fact]
+    public void Nothing_chosen_means_no_browsers()
+    {
+        Assert.Empty(BrowserSelection.Normalize(null));
+        Assert.Empty(BrowserSelection.Normalize([]));
+    }
+
+    [Fact]
+    public void Keeps_known_ids_once_in_catalog_order()
+    {
+        Assert.Equal(["edge", "chrome", "firefox"], BrowserSelection.Normalize(["firefox", "Chrome", "edge", "chrome"]));
+    }
+
+    [Fact]
+    public void Drops_unknown_ids()
+    {
+        Assert.Equal(["brave"], BrowserSelection.Normalize(["brave", "notabrowser", "", "..\\x"]));
+    }
+}

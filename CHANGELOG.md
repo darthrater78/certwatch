@@ -2,6 +2,26 @@
 
 All notable changes to CertWatch. Versions are the UTC date of the release.
 
+## [Unreleased]
+
+### Added
+
+- **Browsers…** in the header: choose which browsers CertWatch monitors. The choice is saved;
+  unticking one stops reading its address bar and removes its tab, keeping its history.
+
+### Changed
+
+- First run monitors nothing until you tick a browser on the start page (earlier builds followed
+  every running browser automatically). `--browser` still adds a browser for that run.
+
+### Security
+
+- The debug log records only the host checked, never the full address-bar text, which could hold
+  paths and query strings.
+- The README now opens with **How it works**: CertWatch reads the address bar and makes its own
+  separate TLS handshake. It never sits in the browser's path, and it doesn't see other tabs or the
+  other hosts a page loads from.
+
 ## [2026.11.17] - 2026-11-17
 
 First release.

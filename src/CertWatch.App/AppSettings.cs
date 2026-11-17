@@ -14,6 +14,8 @@ internal sealed class AppSettings
     public int PopupSeconds { get; set; }
     public bool DebugLogging { get; set; }
     public bool LogToFile { get; set; }
+    /// <summary>Ids of the browsers to monitor (BrowserCatalog). Null until the user first chooses: nothing is monitored.</summary>
+    public List<string>? MonitoredBrowsers { get; set; }
 
     private static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CertWatch", "settings.json");

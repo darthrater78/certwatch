@@ -58,10 +58,12 @@ public partial class MainWindow : Window
         _tray.RecheckRequested += () => SessionFor(_shell.SelectedTab)?.RecheckNow();
         _tray.ExitRequested += ExitApp;
         _popups.OpenRequested += ShowFromTray;
+        _popups.Lifetime = PopupNotifier.LifetimeFor(_settings.PopupSeconds);
+        _shell.PopupText = PopupNotifier.Describe(_settings.PopupSeconds);
         _tray.TestNotificationRequested += () =>
         {
             _popups.Show(new PopupContent("CertWatch test pop-up",
-                "Pop-ups like this appear when a site is steered to ZTNA, inspected, or changes.", StatusKind.Steered), important: false);
+                "Pop-ups like this appear when a site is steered to ZTNA, inspected, or changes.", StatusKind.Steered));
             LogService.Info("notify", "Test pop-up shown");
         };
         _tray.SetState(StatusKind.Neutral, "CertWatch: waiting for a browser");
@@ -107,9 +109,9 @@ public partial class MainWindow : Window
         var status = Status.Of(treatment, c.Verdict);
         _tray.SetState(status, $"CertWatch · {browser} · {site}: {VerdictStyle.Short(treatment, c.Verdict)}");
 
-        foreach (var (title, text, important) in NotificationsFor(check, browser, site, treatment))
+        foreach (var (title, text) in NotificationsFor(check, browser, site, treatment))
         {
-            _popups.Show(new PopupContent(title, text, status), important);
+            _popups.Show(new PopupContent(title, text, status));
             LogService.Info("notify", $"{title}: {text}");
         }
     }
@@ -120,7 +122,7 @@ public partial class MainWindow : Window
     /// Also: inspection stopped, a different inspecting CA, traffic moving to
     /// another interface, certificate changes, and mTLS sites.
     /// </summary>
-    private IEnumerable<(string Title, string Text, bool Important)> NotificationsFor(SiteCheck check, string browser, string site, Treatment treatment)
+    private IEnumerable<(string Title, string Text)> NotificationsFor(SiteCheck check, string browser, string site, Treatment treatment)
     {
         var c = check.Classification;
         var change = check.Observation.Change;
@@ -130,30 +132,30 @@ public partial class MainWindow : Window
         if (!PathTreatment.IsInspected(treatment)) _announcedInspected.Remove(key);
         else if (_announcedInspected.Add(key))
             yield return (change == ChangeKind.InspectionStarted ? $"{browser} · certificate changed for inspection" : $"{browser} · inspection found",
-                          $"{site}: {path}{(c.Vendor is null ? "" : $" by {c.Vendor}")}. Issuer: {c.IssuerName}", true);
+                          $"{site}: {path}{(c.Vendor is null ? "" : $" by {c.Vendor}")}. Issuer: {c.IssuerName}");
         else if (change == ChangeKind.CertificateChanged)
-            yield return ($"{browser} · inspecting CA changed", $"{site} is now inspected via {c.IssuerName}.", true);
+            yield return ($"{browser} · inspecting CA changed", $"{site} is now inspected via {c.IssuerName}.");
 
         if (!PathTreatment.IsSteered(treatment) || PathTreatment.IsInspected(treatment)) _announcedSteered.Remove(key);
         else if (_announcedSteered.Add(key) && change != ChangeKind.EgressChanged) // a move has its own pop-up below
-            yield return ($"{browser} · steered to ZTNA", $"{site} leaves via {check.Egress?.InterfaceLabel ?? "the ZTNA tunnel"}: {path}.", false);
+            yield return ($"{browser} · steered to ZTNA", $"{site} leaves via {check.Egress?.InterfaceLabel ?? "the ZTNA tunnel"}: {path}.");
 
         switch (change)
         {
             case ChangeKind.InspectionStopped:
-                yield return ($"{browser} · inspection stopped", $"{site} now shows its original certificate ({c.IssuerName}). {path}.", false);
+                yield return ($"{browser} · inspection stopped", $"{site} now shows its original certificate ({c.IssuerName}). {path}.");
                 break;
             case ChangeKind.EgressChanged:
-                yield return ($"{browser} · traffic moved", $"{site} now leaves via {check.Egress?.InterfaceLabel}: {path}.", true);
+                yield return ($"{browser} · traffic moved", $"{site} now leaves via {check.Egress?.InterfaceLabel}: {path}.");
                 break;
             case ChangeKind.CertificateChanged when !PathTreatment.IsInspected(treatment):
             case ChangeKind.VerdictChanged:
-                yield return ($"{browser} · certificate changed", $"{site}: {c.Reason}", false);
+                yield return ($"{browser} · certificate changed", $"{site}: {c.Reason}");
                 break;
         }
 
         if (c.MutualTls && change == ChangeKind.FirstSeen)
-            yield return ($"{browser} · mTLS site", $"{site} asks for a client certificate, so it can't be inspected and needs a bypass rule.", true);
+            yield return ($"{browser} · mTLS site", $"{site} asks for a client certificate, so it can't be inspected and needs a bypass rule.");
     }
 
     // ---- header actions ----
@@ -170,6 +172,14 @@ public partial class MainWindow : Window
         _announcedSteered.Clear();
         foreach (var session in _sessions) session.OnHistoryCleared();
         LogService.Info("app", "Cleared all history and the log");
+    }
+
+    private void OnPopupDuration(object sender, RoutedEventArgs e)
+    {
+        _settings.PopupSeconds = PopupNotifier.Next(_settings.PopupSeconds);
+        _settings.Save();
+        _popups.Lifetime = PopupNotifier.LifetimeFor(_settings.PopupSeconds);
+        _shell.PopupText = PopupNotifier.Describe(_settings.PopupSeconds);
     }
 
     private void OnTheme(object sender, RoutedEventArgs e)

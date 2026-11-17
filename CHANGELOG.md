@@ -22,7 +22,8 @@ First release.
 - Per-site history (each site listed once); click a site or a history entry to show it on the card.
 - Pop-ups (CertWatch's own, so Do not disturb can't hide them) when a site is steered to ZTNA, when
   inspection is found or stops, the inspecting CA changes, traffic moves to another adapter, or a
-  site uses mTLS; "Show test pop-up" in the tray menu.
+  site uses mTLS; "Show test pop-up" in the tray menu. They stay until dismissed by default;
+  "Pop-ups" in the header switches to 10 s, 30 s or 1 min.
 - Log window with debug detail and optional file logging. "Clear browser" in each tab clears that
   browser's history; "Clear all" in the header clears every browser's history and the log.
 - Two themes, Flashbang (bright) and Dark, switched from the header (the first run matches Windows); app icon, root export (.cer, .pem or full chain).

@@ -10,6 +10,8 @@ public enum ThemeMode { Flashbang = 1, Dark = 2 }
 internal sealed class AppSettings
 {
     public ThemeMode? Theme { get; set; }
+    /// <summary>How long pop-ups stay, in seconds; 0 (the default) keeps them until dismissed.</summary>
+    public int PopupSeconds { get; set; }
     public bool DebugLogging { get; set; }
     public bool LogToFile { get; set; }
 

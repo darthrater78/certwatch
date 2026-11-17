@@ -29,4 +29,7 @@ internal sealed class ShellViewModel : Observable
 
     private string _themeText = "Theme";
     public string ThemeText { get => _themeText; set => Set(ref _themeText, value); }
+
+    private string _popupText = "Pop-ups: until dismissed";
+    public string PopupText { get => _popupText; set => Set(ref _popupText, value); }
 }

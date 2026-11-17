@@ -15,18 +15,35 @@ internal sealed class PopupNotifier
 {
     private const int MaxVisible = 4;
     private const double Gap = 8, Edge = 12;
-    private static readonly TimeSpan Normal = TimeSpan.FromSeconds(8), Important = TimeSpan.FromSeconds(14);
+
+    /// <summary>The durations offered, in seconds, in the order the header button cycles them; 0 = until dismissed.</summary>
+    private static readonly int[] Choices = [0, 10, 30, 60];
+
+    public static int Next(int seconds) => Choices[(Array.IndexOf(Choices, seconds) + 1) % Choices.Length];
+
+    /// <summary>Unknown values (a hand-edited settings file) fall back to "until dismissed".</summary>
+    public static TimeSpan? LifetimeFor(int seconds) => Choices.Contains(seconds) && seconds > 0 ? TimeSpan.FromSeconds(seconds) : null;
+
+    public static string Describe(int seconds) => LifetimeFor(seconds) switch
+    {
+        null => "Pop-ups: until dismissed",
+        { TotalSeconds: 60 } => "Pop-ups: 1 min",
+        { } t => $"Pop-ups: {t.TotalSeconds:0} s",
+    };
+
+    /// <summary>How long each new pop-up stays; null keeps it until dismissed.</summary>
+    public TimeSpan? Lifetime { get; set; }
 
     private readonly List<PopupWindow> _open = [];
 
     /// <summary>Raised when a pop-up is clicked.</summary>
     public event Action? OpenRequested;
 
-    public void Show(PopupContent content, bool important)
+    public void Show(PopupContent content)
     {
         while (_open.Count >= MaxVisible) _open[0].Close(); // Closed handler removes it
 
-        var popup = new PopupWindow(content, important ? Important : Normal);
+        var popup = new PopupWindow(content, Lifetime);
         popup.Opened += () => OpenRequested?.Invoke();
         popup.Closed += (_, _) =>
         {

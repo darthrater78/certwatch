@@ -24,6 +24,8 @@
                 </TextBlock>
                 <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}" Content="{Binding ThemeText}" Click="OnTheme"
                         ToolTip="Switch theme: Flashbang (bright) or Dark"/>
+                <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}" Content="{Binding PopupText}" Click="OnPopupDuration"
+                        ToolTip="How long pop-ups stay: until dismissed, 10 s, 30 s or 1 min"/>
                 <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}" Content="_Log" Click="OnLog"
                         ToolTip="Open the log, with debug options"/>
                 <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}" Content="Clear _all…" Click="OnClearAll"

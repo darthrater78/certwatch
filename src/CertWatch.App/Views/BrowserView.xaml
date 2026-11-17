@@ -55,7 +55,7 @@
                                 <Button Content="_Copy SHA-256" Command="{Binding CopyFingerprintCommand}" Margin="0,0,6,0"/>
                                 <Button Content="_Export root" Command="{Binding ExportRootCommand}" Margin="0,0,6,0"
                                         ToolTip="Save this site's root certificate (.cer or .pem) or the full chain"/>
-                                <Button Style="{StaticResource PrimaryButton}" Content="_Launch for demo" Command="{Binding LaunchDemoCommand}"
+                                <Button Style="{StaticResource PrimaryButtonStyle}" Content="_Launch for demo" Command="{Binding LaunchDemoCommand}"
                                         Visibility="{Binding CanLaunchDemo, Converter={StaticResource BoolToVis}}"
                                         ToolTip="Optional. Opens a separate window of this browser, in its own CertWatch tab, so every open tab and the exact certificate the browser received can be read. Your normal windows keep working here."/>
                             </StackPanel>

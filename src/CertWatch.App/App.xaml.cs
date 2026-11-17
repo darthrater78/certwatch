@@ -14,6 +14,7 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        CrashReporter.Install(this);
         base.OnStartup(e);
 
         _instanceMutex = new Mutex(initiallyOwned: true, InstanceMutexName, out var firstInstance);

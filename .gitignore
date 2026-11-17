@@ -1,0 +1,7 @@
+bin/
+obj/
+*.user
+.vs/
+artifacts/
+.dev-skills-gates.md
+.dev-skills-handoff.md

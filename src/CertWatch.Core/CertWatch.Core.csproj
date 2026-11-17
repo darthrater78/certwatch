@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>CertWatch.Core</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.15" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="CertWatch.Core.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Mozilla CA bundle (via curl.se), used to tell public roots from private/inspection roots. -->
+    <EmbeddedResource Include="Resources\public-roots.pem" LogicalName="CertWatch.Core.public-roots.pem" />
+  </ItemGroup>
+
+</Project>

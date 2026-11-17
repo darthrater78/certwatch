@@ -1,0 +1,34 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Dark theme. Generated from the colour tokens in DESIGN.md; edit the tokens, not this file. -->
+    <SolidColorBrush x:Key="Brand" Color="#000000"/>
+    <SolidColorBrush x:Key="OnBrand" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="OnBrandMuted" Color="#B3B3BB"/>
+    <SolidColorBrush x:Key="Ground" Color="#0A0A0B"/>
+    <SolidColorBrush x:Key="Surface" Color="#111113"/>
+    <SolidColorBrush x:Key="SurfaceAlt" Color="#18181B"/>
+    <SolidColorBrush x:Key="Line" Color="#26262B"/>
+    <SolidColorBrush x:Key="LineStrong" Color="#3A3A41"/>
+    <SolidColorBrush x:Key="OnSurface" Color="#F2F2F4"/>
+    <SolidColorBrush x:Key="OnSurfaceMuted" Color="#9E9EA8"/>
+    <SolidColorBrush x:Key="Heading" Color="#F2F2F4"/>
+    <SolidColorBrush x:Key="PrimaryButton" Color="#F2F2F4"/>
+    <SolidColorBrush x:Key="OnPrimaryButton" Color="#000000"/>
+    <SolidColorBrush x:Key="Inspected" Color="#7B61F0"/>
+    <SolidColorBrush x:Key="InspectedTint" Color="#221C3A"/>
+    <SolidColorBrush x:Key="OnInspectedTint" Color="#C9BDFF"/>
+    <SolidColorBrush x:Key="Steered" Color="#2F86E8"/>
+    <SolidColorBrush x:Key="SteeredTint" Color="#10223A"/>
+    <SolidColorBrush x:Key="OnSteeredTint" Color="#9EC7F7"/>
+    <SolidColorBrush x:Key="Direct" Color="#20A088"/>
+    <SolidColorBrush x:Key="DirectTint" Color="#0F2621"/>
+    <SolidColorBrush x:Key="OnDirectTint" Color="#8FD6C2"/>
+    <SolidColorBrush x:Key="Untrusted" Color="#E0483F"/>
+    <SolidColorBrush x:Key="UntrustedTint" Color="#2E1414"/>
+    <SolidColorBrush x:Key="OnUntrustedTint" Color="#F2AAA3"/>
+    <SolidColorBrush x:Key="Neutral" Color="#9E9EA8"/>
+    <SolidColorBrush x:Key="NeutralTint" Color="#1E1E22"/>
+    <SolidColorBrush x:Key="OnNeutralTint" Color="#C6C8CC"/>
+    <SolidColorBrush x:Key="OnStatus" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="SelectedRow" Color="#23232A"/>
+</ResourceDictionary>

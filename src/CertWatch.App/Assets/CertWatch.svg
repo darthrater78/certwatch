@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="CertWatch">
+  <rect width="64" height="64" rx="14" fill="#1F2A44"/>
+  <path d="M32 9 L50 16 V31 C50 43 42 51 32 55 C22 51 14 43 14 31 V16 Z" fill="none" stroke="#FFFFFF" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M32 46 V37 M32 37 L24 28 M32 37 L40 28" fill="none" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="23.5" cy="25.5" r="4" fill="#7FD3C0"/>
+  <circle cx="40.5" cy="25.5" r="4" fill="#B9A8FF"/>
+</svg>

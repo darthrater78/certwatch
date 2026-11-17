@@ -9,7 +9,7 @@
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
     </Window.Resources>
     <DockPanel>
-        <!-- App header: identity, version, required links, Log, Theme -->
+        <!-- App header: identity, version, required links, Browsers, Clear all, Log, Pop-ups, Theme -->
         <Border DockPanel.Dock="Top" Background="{DynamicResource Brand}" Height="36">
             <DockPanel LastChildFill="False" Margin="10,0,0,0">
                 <Image Source="Assets/CertWatch-256.png" Width="20" Height="20" VerticalAlignment="Center"
@@ -30,6 +30,8 @@
                         ToolTip="Open the log, with debug options"/>
                 <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}" Content="Clear _all…" Click="OnClearAll"
                         ToolTip="Clear every site's history in every browser, and the log"/>
+                <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}" Content="_Browsers…" Click="OnBrowsers"
+                        ToolTip="Choose which browsers CertWatch monitors"/>
             </DockPanel>
         </Border>
 
@@ -60,18 +62,29 @@
                 </TabControl.ContentTemplate>
             </TabControl>
 
-            <TextBlock Margin="40" TextWrapping="Wrap" FontSize="15"
-                       HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"
-                       Text="No supported browser is running. Open Edge, Chrome, Brave, Island, Vivaldi, Opera or Firefox and its tab appears here.">
-                <TextBlock.Style>
-                    <Style TargetType="TextBlock" BasedOn="{StaticResource Muted}">
+            <StackPanel Margin="40" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="460">
+                <StackPanel.Style>
+                    <Style TargetType="StackPanel">
                         <Setter Property="Visibility" Value="Collapsed"/>
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding HasTabs}" Value="False"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
                         </Style.Triggers>
                     </Style>
-                </TextBlock.Style>
-            </TextBlock>
+                </StackPanel.Style>
+                <TextBlock Text="{Binding EmptyText}" Style="{StaticResource Muted}" FontSize="15" TextWrapping="Wrap" TextAlignment="Center"/>
+                <!-- Nothing ticked (first run, or after "Monitor none"): one way in, the picker -->
+                <Button Content="_Choose browsers…" Click="OnBrowsers"
+                        HorizontalAlignment="Center" Margin="0,16,0,0">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource PrimaryButtonStyle}">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding AnyChosen}" Value="False"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+            </StackPanel>
         </Grid>
     </DockPanel>
 </Window>

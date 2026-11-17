@@ -49,12 +49,12 @@ public sealed class VerdictCard : Observable
     /// <summary>The chain behind the card (empty for saved results), for root export.</summary>
     public IReadOnlyList<X509Certificate2> Chain { get; private set; } = [];
 
-    public void ShowWaiting(string? message = null)
+    public void ShowWaiting(string? message = null, string? headline = null)
     {
         Status = StatusKind.Neutral;
         Site = "";
         Context = $"{_browserName} · waiting";
-        Headline = "No HTTPS page in focus";
+        Headline = headline ?? "No HTTPS page in focus";
         Subline = message ?? $"Open an HTTPS page in {_browserName}.";
         Fingerprint = "";
         Chain = [];

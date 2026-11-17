@@ -2,6 +2,33 @@
 
 All notable changes to CertWatch. Versions are the UTC date of the release.
 
+## [2026.11.17-2] - 2026-11-17
+
+### Added
+
+- Browser picker (first run, and **Browsers…** in the header): tick any number of browsers, then
+  apply. Every chosen browser gets a tab right away, marked **Not running** until it starts. The
+  choice is saved; dropping one stops reading its address bar and removes its tab, keeping its
+  history.
+
+### Changed
+
+- First run monitors nothing until you pick browsers in the picker (earlier builds followed every
+  running browser automatically). `--browser` still adds a browser for that run.
+
+### Docs
+
+- README screenshots redrawn for the new header, plus one of the browser picker. They're drawn by
+  `tools/gen_mockups.py`, now kept in the repo.
+
+### Security
+
+- The debug log records only the host checked, never the full address-bar text, which could hold
+  paths and query strings.
+- The README now opens with **How it works**: CertWatch reads the address bar and makes its own
+  separate TLS handshake. It never sits in the browser's path, and it doesn't see other tabs or the
+  other hosts a page loads from.
+
 ## [2026.11.17] - 2026-11-17
 
 First release.

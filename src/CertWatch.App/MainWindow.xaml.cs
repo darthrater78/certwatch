@@ -17,8 +17,9 @@ using CertWatch.Core.Trust;
 namespace CertWatch.App;
 
 /// <summary>
-/// One window, one tab per browser. Browsers are added automatically
-/// when they start running; a tab stays after its browser closes so its history remains visible.
+/// One window, one tab per browser. Only browsers the user chose in "Browsers…" (or named with
+/// --browser/--process) are monitored. Each chosen browser has a tab whether or not it's running, so
+/// its history is always visible. Browsers that weren't chosen are never read.
 /// </summary>
 public partial class MainWindow : Window
 {
@@ -32,7 +33,8 @@ public partial class MainWindow : Window
     private readonly PopupNotifier _popups = new();
     private readonly WindowsRouteLookup _routes = new();
     private readonly List<BrowserSession> _sessions = [];
-    private readonly DispatcherTimer _browserScan = new() { Interval = TimeSpan.FromSeconds(3) };
+    // Catalog ids the user ticked; saved in settings.json. Empty until the first choice.
+    private readonly HashSet<string> _monitored = new(StringComparer.OrdinalIgnoreCase);
     // Browser|site pairs already announced as inspected this session, so each gets one pop-up.
     private readonly HashSet<string> _announcedInspected = [];
     // Browser|site pairs already announced as steered to ZTNA (not inspected) this session.
@@ -68,20 +70,80 @@ public partial class MainWindow : Window
         };
         _tray.SetState(StatusKind.Neutral, "CertWatch: waiting for a browser");
 
+        _monitored.UnionWith(BrowserSelection.Normalize(_settings.MonitoredBrowsers));
+        // Browsers named on the command line are an explicit choice for this run (not saved).
         foreach (var b in options.Browsers) AddSession(b);
-        ScanForBrowsers();
-        _browserScan.Tick += (_, _) => ScanForBrowsers();
-        _browserScan.Start();
+        UpdateEmptyState();
+        // First run: nothing is monitored yet, so ask straight away (several can be ticked before Apply).
+        if (_settings.MonitoredBrowsers is null && options.Browsers.Count == 0)
+        {
+            LogService.Info("app", "First run: asking which browsers to monitor");
+            ContentRendered += (_, _) => Dispatcher.BeginInvoke(ChooseBrowsers);
+        }
+        AddChosenSessions();
     }
 
-    private void ScanForBrowsers()
+    /// <summary>A tab for every chosen browser, in catalog order, running or not.</summary>
+    private void AddChosenSessions()
     {
         foreach (var browser in BrowserCatalog.All)
         {
-            if (_sessions.Any(s => s.Browser.Id == browser.Id)) continue;
-            if (BrowserSession.IsRunning(browser)) AddSession(browser);
+            if (_monitored.Contains(browser.Id)) AddSession(browser); // no-op if it already has a tab
         }
     }
+
+    /// <summary>Opens the picker; applies the whole selection at once, so tabs only change after Apply.</summary>
+    private void ChooseBrowsers()
+    {
+        var choices = BrowserCatalog.All.Select(b =>
+            new BrowserChoice(b.Id, b.DisplayName,
+                _monitored.Contains(b.Id) || _sessions.Any(s => s.Browser.Id == b.Id), // includes --browser ones
+                BrowserSession.IsRunning(b)));
+        var picker = new BrowserPickerWindow(choices) { Owner = this };
+        if (picker.ShowDialog() != true || picker.Selected is not { } selected) return;
+        ApplySelection(selected);
+    }
+
+    private void ApplySelection(IReadOnlyList<string> selected)
+    {
+        var chosen = BrowserSelection.Normalize(selected);
+        _monitored.Clear();
+        _monitored.UnionWith(chosen);
+        _settings.MonitoredBrowsers = chosen.ToList();
+        _settings.Save();
+        LogService.Info("app", chosen.Count == 0 ? "Monitoring no browsers" : $"Monitoring {string.Join(", ", chosen)}");
+
+        foreach (var session in _sessions.Where(s => BrowserCatalog.Find(s.Browser.Id) is not null && !_monitored.Contains(s.Browser.Id)).ToList())
+            RemoveSession(session);
+        AddChosenSessions();
+        UpdateEmptyState();
+    }
+
+    /// <summary>Stops reading that browser's address bar and removes its tab. Its history stays saved.</summary>
+    private void RemoveSession(BrowserSession session)
+    {
+        session.Checked -= OnChecked;
+        // Stopping the follower waits for its poll to finish; keep that wait off the UI thread.
+        _ = Task.Run(session.Dispose);
+        _sessions.Remove(session);
+        var prefix = $"{session.Browser.DisplayName}|";
+        _announcedInspected.RemoveWhere(k => k.StartsWith(prefix, StringComparison.Ordinal));
+        _announcedSteered.RemoveWhere(k => k.StartsWith(prefix, StringComparison.Ordinal));
+        var wasSelected = _shell.SelectedTab == session.View;
+        _shell.Tabs.Remove(session.View);
+        if (wasSelected) _shell.SelectedTab = _shell.Tabs.FirstOrDefault();
+        _shell.HasTabs = _shell.Tabs.Count > 0;
+        if (!_shell.HasTabs) _tray.SetState(StatusKind.Neutral, "CertWatch: waiting for a browser");
+    }
+
+    private void UpdateEmptyState()
+    {
+        _shell.AnyChosen = _monitored.Count > 0 || _sessions.Count > 0;
+        // Only reachable with nothing chosen: every chosen browser has a tab.
+        _shell.EmptyText = "No browsers are monitored yet. Choose which ones CertWatch watches; it reads the address bar of those browsers only.";
+    }
+
+    private void OnBrowsers(object sender, RoutedEventArgs e) => ChooseBrowsers();
 
     private BrowserSession AddSession(BrowserDefinition browser)
     {
@@ -243,7 +305,6 @@ public partial class MainWindow : Window
     {
         WindowPlacement.Save(this);
         _exiting = true;
-        _browserScan.Stop();
         foreach (var s in _sessions.ToList()) s.Dispose();
         _popups.CloseAll();
         _tray.Dispose();

@@ -2,17 +2,66 @@
 
 <img src="src/CertWatch.App/Assets/CertWatch-256.png" width="64" align="right" alt="CertWatch icon">
 
-**[GitHub](https://github.com/darthrater78/certwatch)** · **[Release notes for v2026.11.17](https://github.com/darthrater78/certwatch/releases/tag/v2026.11.17)** · [Changelog](CHANGELOG.md)
+**[GitHub](https://github.com/darthrater78/certwatch)** · **[Release notes for v2026.11.17-2](https://github.com/darthrater78/certwatch/releases/tag/v2026.11.17-2)** · [Changelog](CHANGELOG.md)
 
-A Windows app for ZTNA demos. For every browser that's running, it shows, live, whether the site in
-the active tab is **steered into the ZTNA tunnel** and whether its certificate was **replaced for
-inspection**, with the path drawn out (browser → tunnel or direct → inspection → site). It calls
-out changes in pop-ups, flags mTLS sites, and keeps an encrypted per-site history.
+A Windows app for ZTNA demos. For each browser you choose to monitor, it shows, live, whether the
+site in the active tab is **steered into the ZTNA tunnel** and whether its certificate was
+**replaced for inspection**, with the path drawn out (browser → tunnel or direct → inspection →
+site). It calls out changes in pop-ups, flags mTLS sites, and keeps an encrypted per-site history.
+
+## How it works: it watches, it never intercepts
+
+> [!IMPORTANT]
+> **CertWatch is not in the browser's path.** It doesn't proxy, decrypt, capture or alter any
+> browser traffic. The browser's own connections never pass through CertWatch, and it can't see
+> what they contain.
+
+What CertWatch actually does, in order:
+
+1. **You choose which browsers to monitor.** Nothing is read until you pick browsers (CertWatch
+   asks on first run; change it later with **Browsers…**). Browsers you didn't pick are never read.
+2. **It reads the address bar.** For each ticked browser it reads the address shown in the active
+   tab, through Windows UI Automation, the accessibility interface screen readers use. It only reads
+   the text. It never types into, clicks or controls the browser, and needs no extension.
+3. **It keeps only the host and port.** `https://portal.contoso.com/login?token=…` becomes
+   `portal.contoso.com:443`. The path and query string are dropped before anything is checked,
+   saved or logged. Non-HTTPS pages (`edge://`, `about:`, plain `http`) are ignored.
+4. **It makes its own, separate connection to that host.** It starts a TLS handshake from
+   CertWatch itself (through the system proxy if one is set), records the certificate the network
+   hands back, and closes the connection. It sends no request, no cookies and no client
+   certificate. It repeats this when the site changes and every 15 seconds after that.
+5. **It works out the verdict.** The certificate chain says whether the site's own certificate
+   arrived (public root) or a replacement did (a private root this PC trusts means inspection).
+   Windows' routing table says which adapter the traffic leaves by: the ZTNA tunnel or the normal
+   network.
+
+**What it doesn't see.** Because it reads the address bar rather than the network, CertWatch knows
+only the site in the active tab of each monitored browser. It doesn't see other tabs, the other
+hosts a page loads from (CDNs, APIs, iframes), DNS lookups, or anything that never appears in the
+address bar. If `portal.contoso.com` pulls data from `api.contoso.net`, only the portal is checked.
+
+**Its view can differ from the browser's.** The verdict describes CertWatch's own connection, not
+the browser's. Both normally take the same path (same adapter, same proxy), so they match. They can
+differ when a ZTNA product treats traffic per browser rather than per device. An enterprise browser
+with ZTNA built in is the main example: its in-browser path may be inspected or steered in a way a
+separate connection from another app doesn't see.
+
+**What it never does.** It listens on no network port, installs no certificate, changes no proxy,
+PAC, route or registry setting, injects nothing into any process, hooks no keyboard input, and never
+starts or drives a browser. The details, checkable against the code, are under
+[Security architecture](#security-architecture).
 
 ## Screenshots
 
 These are illustrations drawn from the app's own theme colours and layout, with invented example
-data (Contoso, Fabrikam and Adatum are fictitious names), not captures of a real session.
+data (Contoso, Fabrikam and Adatum are fictitious names), not captures of a real session. They are
+drawn by `tools/gen_mockups.py` (see [Build](#build-linux-or-windows)).
+
+**Choosing browsers.** On first run, and from **Browsers…** in the header, CertWatch asks which
+browsers to monitor. Tick as many as you like; nothing changes until you press **Monitor**. Every
+chosen browser gets a tab: here Firefox was chosen but isn't running, so its tab says so.
+
+![The Choose browsers dialog over the main window, with four browsers ticked](docs/screenshots/picker.png)
 
 **Steered to ZTNA, not inspected (Dark).** Edge on `crm.fabrikam.com`: traffic leaves through the
 ZTNA adapter's tunnel, and the chain ends at a public root, so the certificate is the site's
@@ -39,17 +88,22 @@ changed. **Back to live** returns to the current result.
 
 ![The history of a site, with a saved result shown on the card and Back to live](docs/screenshots/history.png)
 
-**The log.** Every check, change and pop-up, with **Debug detail** for address-bar reads, routes
-and issuers.
+**The log.** Every check, change and pop-up, with **Debug detail** for address-bar reads (the
+host checked, never the full address), routes and issuers.
 
 ![The CertWatch log window with debug detail on](docs/screenshots/log.png)
 
 ## Run (on Windows)
 
-Run `CertWatch.exe`. Only one copy runs; starting it again brings the window forward. There's a tab
-for every supported browser that's running (Edge, Chrome, Brave, Island, Vivaldi, Opera, Firefox).
-Tabs appear as browsers start and stay after they close, and each follows its own browser, even in
-the background. Each tab header shows that browser's current site and verdict.
+Run `CertWatch.exe`. Only one copy runs; starting it again brings the window forward. On first run
+it monitors nothing and asks which browsers to watch: tick as many as you like (Edge, Chrome, Brave,
+Island, Vivaldi, Opera, Firefox) and press **Monitor**. Change it any time with **Browsers…** in the
+header. Your choice is saved. Each chosen browser gets a tab straight away, running or not (a closed
+browser's tab says **Not running** and still shows its history), and each follows its own browser,
+even in the background. Dropping a browser in
+**Browsers…** stops reading its address bar right away and removes its tab. Its history is kept and
+comes back if you pick it again. Browsers you didn't pick are never read. Each tab header shows that
+browser's current site and verdict.
 
 In a tab:
 
@@ -64,10 +118,10 @@ In a tab:
 - **Clear site** clears one site for that browser; **Clear browser…** clears all of that browser's
   history.
 
-In the header: **GitHub** and **Release notes** links, **Clear all…** (every browser's history and
-the log), **Log**, **Pop-ups** (how long pop-ups stay) and **Theme** (Flashbang, the bright theme,
+In the header: **GitHub** and **Release notes** links, **Browsers…** (which browsers to monitor),
+**Clear all…** (every browser's history and the log), **Log**, **Pop-ups** (how long pop-ups stay) and **Theme** (Flashbang, the bright theme,
 or Dark; the first run matches Windows). The **Log** window has **Debug detail**
-(address-bar reads, routes and issuers) and **Write log to file** (off by default), plus Open log
+(address-bar reads as the host checked, never the full address; routes and issuers) and **Write log to file** (off by default), plus Open log
 folder, Copy all and Clear log.
 
 Closing the window keeps CertWatch in the tray (the icon takes the latest verdict's colour); exit
@@ -83,7 +137,7 @@ is over it.
 Optional command-line switches:
 
 ```
-CertWatch.exe --browser island                  # always show this tab, even before Island starts
+CertWatch.exe --browser island                  # monitor Island this run (not saved), tab shown before it starts
 CertWatch.exe --process SomeBrowser.exe         # add a tab for a browser not in the built-in list
 CertWatch.exe --interval 10                     # re-check each current site every 10 s (default 15)
 ```
@@ -125,8 +179,15 @@ How CertWatch is built with regard to security, in statements you can check agai
 
 ### Design
 
+- **Observe only, never intercept.** CertWatch sits beside the browser, not in its path. It listens
+  on no port, installs no certificate, changes no proxy, PAC or route setting, injects nothing into
+  any process, hooks no keyboard input, and never starts, drives or types into a browser. The
+  browser's own traffic never passes through CertWatch.
 - **What it reads.** The active tab's address comes from the browser's address bar through Windows
-  UI Automation (read-only). Site certificates come from CertWatch's own TLS connection to that
+  UI Automation (read-only: it reads the bar's value and never sets it, clicks or sends keys), and
+  only for the browsers you ticked under **Browsers…**; nothing is monitored until you choose. Only
+  the host and port are kept: the path and query string are dropped before anything is checked,
+  saved or logged. Site certificates come from CertWatch's own TLS connection to that
   site. Routes come from Windows' routing table (`GetBestRoute2`). All of it is treated as
   untrusted data: addresses are parsed and only `https` hosts are checked, and pop-up text is shown
   as plain strings, never as markup.
@@ -171,6 +232,10 @@ How CertWatch is built with regard to security, in statements you can check agai
 
 ### Changes
 
+- 2026-11-17: Browsers are monitored only once you tick them (**Browsers…**); nothing is read on first
+  run. Debug logging now records only the host checked, not the full address-bar text, which could
+  include paths and query strings (sign-in tokens, for example). Security pass: confirmed CertWatch
+  listens on nothing, changes no system or browser setting, and only reads the address bar.
 - 2026-11-17: Releases get a build provenance attestation; pull requests that change packages run
   dependency review. `crash.log` (plain text, written only on a crash) is listed above; keeping it
   readable was a deliberate choice, since the full error message is what makes a crash fixable.
@@ -209,6 +274,9 @@ anywhere.
 - `src/CertWatch.App`: Windows-only WPF app. UI Automation tracking, window, themes, tray, pop-ups, log.
 - `tests/CertWatch.Core.Tests`: xUnit, including a local TLS server (chain and mTLS).
 - `tools/make_icon.py`, `tools/gen_theme.py`: regenerate the icon and the theme files from `DESIGN.md`.
+- `tools/gen_mockups.py`: redraws the README mock-ups in `docs/screenshots/` with a headless Chromium
+  (Playwright's `chrome-headless-shell`, or `CHROME=<path>`), using the `DESIGN.md` colours and the
+  csproj version. Run it after a UI change: `python3 -I tools/gen_mockups.py`.
 
 ### CI and releases
 

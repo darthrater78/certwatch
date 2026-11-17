@@ -2,7 +2,7 @@
 
 All notable changes to CertWatch. Versions are the UTC date of the release.
 
-## [Unreleased]
+## [2026.11.17-2] - 2026-11-17
 
 ### Added
 
@@ -15,6 +15,11 @@ All notable changes to CertWatch. Versions are the UTC date of the release.
 
 - First run monitors nothing until you pick browsers in the picker (earlier builds followed every
   running browser automatically). `--browser` still adds a browser for that run.
+
+### Docs
+
+- README screenshots redrawn for the new header, plus one of the browser picker. They're drawn by
+  `tools/gen_mockups.py`, now kept in the repo.
 
 ### Security
 

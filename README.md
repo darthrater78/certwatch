@@ -2,7 +2,7 @@
 
 <img src="src/CertWatch.App/Assets/CertWatch-256.png" width="64" align="right" alt="CertWatch icon">
 
-**[GitHub](https://github.com/darthrater78/certwatch)** · **[Release notes for v2026.11.17](https://github.com/darthrater78/certwatch/releases/tag/v2026.11.17)** · [Changelog](CHANGELOG.md)
+**[GitHub](https://github.com/darthrater78/certwatch)** · **[Release notes for v2026.11.17-2](https://github.com/darthrater78/certwatch/releases/tag/v2026.11.17-2)** · [Changelog](CHANGELOG.md)
 
 A Windows app for ZTNA demos. For each browser you choose to monitor, it shows, live, whether the
 site in the active tab is **steered into the ZTNA tunnel** and whether its certificate was
@@ -54,7 +54,14 @@ starts or drives a browser. The details, checkable against the code, are under
 ## Screenshots
 
 These are illustrations drawn from the app's own theme colours and layout, with invented example
-data (Contoso, Fabrikam and Adatum are fictitious names), not captures of a real session.
+data (Contoso, Fabrikam and Adatum are fictitious names), not captures of a real session. They are
+drawn by `tools/gen_mockups.py` (see [Build](#build-linux-or-windows)).
+
+**Choosing browsers.** On first run, and from **Browsers…** in the header, CertWatch asks which
+browsers to monitor. Tick as many as you like; nothing changes until you press **Monitor**. Every
+chosen browser gets a tab: here Firefox was chosen but isn't running, so its tab says so.
+
+![The Choose browsers dialog over the main window, with four browsers ticked](docs/screenshots/picker.png)
 
 **Steered to ZTNA, not inspected (Dark).** Edge on `crm.fabrikam.com`: traffic leaves through the
 ZTNA adapter's tunnel, and the chain ends at a public root, so the certificate is the site's
@@ -81,8 +88,8 @@ changed. **Back to live** returns to the current result.
 
 ![The history of a site, with a saved result shown on the card and Back to live](docs/screenshots/history.png)
 
-**The log.** Every check, change and pop-up, with **Debug detail** for address-bar reads, routes
-and issuers.
+**The log.** Every check, change and pop-up, with **Debug detail** for address-bar reads (the
+host checked, never the full address), routes and issuers.
 
 ![The CertWatch log window with debug detail on](docs/screenshots/log.png)
 
@@ -267,6 +274,9 @@ anywhere.
 - `src/CertWatch.App`: Windows-only WPF app. UI Automation tracking, window, themes, tray, pop-ups, log.
 - `tests/CertWatch.Core.Tests`: xUnit, including a local TLS server (chain and mTLS).
 - `tools/make_icon.py`, `tools/gen_theme.py`: regenerate the icon and the theme files from `DESIGN.md`.
+- `tools/gen_mockups.py`: redraws the README mock-ups in `docs/screenshots/` with a headless Chromium
+  (Playwright's `chrome-headless-shell`, or `CHROME=<path>`), using the `DESIGN.md` colours and the
+  csproj version. Run it after a UI change: `python3 -I tools/gen_mockups.py`.
 
 ### CI and releases
 

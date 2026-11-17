@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # CertWatch build: the one script local builds, CI and releases all run.
 #   scripts/build.sh test      build the solution (Release) and run the tests
-#   scripts/build.sh publish   self-contained single-file win-x64 build, zipped into artifacts/
+#   scripts/build.sh publish   self-contained single-file win-x64 exe → artifacts/CertWatch-v<version>-win-x64.exe
 #   scripts/build.sh all       both (default)
 # Works on Linux (the WPF app cross-compiles via EnableWindowsTargeting) and Windows (Git Bash).
 set -euo pipefail
@@ -20,14 +20,12 @@ run_tests() {
 publish() {
   rm -rf artifacts/win-x64
   dotnet publish "$csproj" --configuration Release --runtime win-x64 --self-contained true \
-    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true --output artifacts/win-x64
-  local zip="artifacts/CertWatch-v${version}-win-x64.zip"
-  rm -f "$zip"
-  # python3 is on both CI runners and dev machines; no zip tool needed.
-  python3 -I -c 'import sys, zipfile
-with zipfile.ZipFile(sys.argv[1], "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
-    z.write(sys.argv[2], "CertWatch.exe")' "$zip" artifacts/win-x64/CertWatch.exe
-  echo "Built $zip"
+    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
+    -p:EnableCompressionInSingleFile=true --output artifacts/win-x64
+  # The exe is shipped as-is (already compressed inside), named with the version for CI and releases.
+  local exe="artifacts/CertWatch-v${version}-win-x64.exe"
+  cp artifacts/win-x64/CertWatch.exe "$exe"
+  echo "Built $exe"
 }
 
 case "$target" in

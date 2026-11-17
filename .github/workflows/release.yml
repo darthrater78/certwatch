@@ -83,7 +83,7 @@ jobs:
             sleep 20
           done
 
-  # Builds the Windows zip from the tagged commit and publishes the release. Tests aren't re-run:
+  # Builds the Windows exe from the tagged commit and publishes the release. Tests aren't re-run:
   # the gate required CI (which runs them) to have passed on this exact commit.
   release:
     needs: gate
@@ -132,7 +132,7 @@ jobs:
             echo "Release $version" > release-notes.md
           fi
 
-      - name: Create GitHub release with the Windows zip
+      - name: Create GitHub release with the Windows exe
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -143,7 +143,7 @@ jobs:
             *-dev.*|*-alpha.*|*-beta.*|*-rc.*) prerelease_flag="--prerelease" ;;
           esac
           gh release create "$GITHUB_REF_NAME" \
-            "artifacts/CertWatch-v${version}-win-x64.zip" \
+            "artifacts/CertWatch-v${version}-win-x64.exe" \
             --title "CertWatch $GITHUB_REF_NAME" \
             --notes-file release-notes.md \
             $prerelease_flag
@@ -155,7 +155,7 @@ jobs:
           set -euo pipefail
           assets="$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')"
           echo "Assets: $assets"
-          if [ -z "$assets" ]; then
-            echo "::error::Release published without the Windows zip attached."
+          if ! printf '%s\n' "$assets" | grep -qx "CertWatch-${GITHUB_REF_NAME}-win-x64.exe"; then
+            echo "::error::Release published without the Windows exe attached."
             exit 1
           fi

@@ -51,7 +51,7 @@ public partial class MainWindow : Window
         _history = HistoryKeyStore.OpenHistory(options.DatabasePath ?? HistoryStore.DefaultPath);
         LogService.Info("app", $"CertWatch {_shell.VersionText} started");
 
-        _tray.OpenRequested += () => Dispatcher.BeginInvoke(ShowFromTray); // also raised from toast clicks (background thread)
+        _tray.OpenRequested += () => Dispatcher.BeginInvoke(ShowFromTray); // also raised by clicking a notification
         _tray.RecheckRequested += () => SessionFor(_shell.SelectedTab)?.RecheckNow();
         _tray.ExitRequested += ExitApp;
         _tray.TestNotificationRequested += () => _tray.Notify("CertWatch test notification",

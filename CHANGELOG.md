@@ -32,3 +32,8 @@ First release.
 - History encrypted at rest (AES-256-GCM, master key protected by Windows DPAPI).
 - No debugging port: the demo browser is reached over pipes only CertWatch holds.
 - Self-contained build bundles the .NET 10.0.15 security release.
+
+### Changed
+
+- Smaller download: the single-file exe is compressed, bundles only English framework resources,
+  and no longer carries WinForms or the WinRT SDK (tray icon and notifications use Win32 directly).

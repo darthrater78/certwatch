@@ -86,17 +86,16 @@ How CertWatch is built with regard to security, in statements you can check agai
   UI Automation (read-only). Site certificates come from CertWatch's own TLS connection to that
   site; in **Launch for demo** mode, also from the demo browser over DevTools. Routes come from
   Windows' routing table (`GetBestRoute2`). All of it is treated as untrusted data: addresses are
-  parsed and only `https` hosts are checked, and every value shown in a notification is
-  XML-escaped.
+  parsed and only `https` hosts are checked, and notification text is passed to Windows as plain
+  strings, never as markup.
 - **What it trusts.** Nothing it observes. CertWatch's own TLS connection accepts any certificate
   on purpose, because its job is to record what was presented. It sends no application data over
   that connection, and it requires TLS 1.2 or 1.3. Verdicts compare the chain against the bundled
   Mozilla root list (`src/CertWatch.Core/Resources/public-roots.pem`, from curl.se), matched by
   public key, and against Certificate Transparency proofs.
 - **Privileges.** Runs as the signed-in user (`asInvoker`), never elevated. It writes only under
-  `%LOCALAPPDATA%\CertWatch` and one per-user registry key
-  (`HKCU\Software\Classes\AppUserModelId\CertWatch.App`, so Windows can show its notifications).
-  P/Invoke calls load system DLLs from System32 only.
+  `%LOCALAPPDATA%\CertWatch`, and nothing to the registry. P/Invoke calls load system DLLs from
+  System32 only.
 - **What it stores, and how it's protected (encryption at rest).**
   - `history.db`: sites visited per browser, with IPs, certificate details and egress. Everything
     that identifies a site or connection is encrypted with **AES-256-GCM**. Rows are found by an
@@ -135,6 +134,9 @@ How CertWatch is built with regard to security, in statements you can check agai
   program on the PC could have reached.
 - 2026-11-16: Notifications use Windows' built-in API instead of an unmaintained package
   (Microsoft.Toolkit.Uwp.Notifications, last released 2022).
+- 2026-11-16: The tray icon and notifications call Windows directly (`Shell_NotifyIcon`) instead of
+  WinForms and the WinRT toast API. That drops ~50 MB of bundled code and the per-user
+  `AppUserModelId` registry key earlier builds wrote.
 - 2026-11-16: The self-contained build bundles .NET 10.0.15 (a security release) instead of
   10.0.14. Microsoft.Data.Sqlite moved from the .NET 11 (STS) line to 10.0.15 (LTS).
 - 2026-11-16: CertWatch's own TLS connection now requires TLS 1.2+. P/Invoke is limited to System32.
@@ -144,7 +146,7 @@ How CertWatch is built with regard to security, in statements you can check agai
 
 ```
 scripts/build.sh test       # build the solution and run the tests
-scripts/build.sh publish    # self-contained single-file win-x64 build → artifacts/CertWatch-v<version>-win-x64.zip
+scripts/build.sh publish    # self-contained single-file win-x64 build → artifacts/CertWatch-v<version>-win-x64.exe
 scripts/build.sh            # both
 ```
 
@@ -159,11 +161,11 @@ anywhere.
 ### CI and releases
 
 - **CI** (`.github/workflows/ci.yml`) runs `scripts/build.sh` on every push and pull request, checks
-  for vulnerable packages, and uploads the Windows zip as an artifact (kept 14 days). Docs-only
+  for vulnerable packages, and uploads the Windows exe itself, not zipped, as an artifact (kept 14 days). Docs-only
   changes skip the build.
 - **Release** (`.github/workflows/release.yml`) runs when a `v*` tag is pushed. It checks that the tag
   is on `main` (pre-release tags such as `-dev.1` excepted), that CI passed for that commit, and that
-  the tag matches `<Version>` in `CertWatch.App.csproj`. It then builds the zip and publishes the
+  the tag matches `<Version>` in `CertWatch.App.csproj`. It then builds the exe and publishes the
   GitHub release with the matching `CHANGELOG.md` section as notes. Pre-release tags publish as
   pre-releases.
 - **Lint workflows** (`.github/workflows/lint-workflows.yml`) runs actionlint on workflow changes.

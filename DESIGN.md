@@ -29,25 +29,31 @@ colors:
   neutral-tint: "#EEEFF1"
   on-neutral-tint: "#454545"
   on-status: "#FFFFFF"
-  ground-dark: "#1B1F27"
-  surface-dark: "#232833"
-  surface-alt-dark: "#262B36"
-  line-dark: "#343B48"
-  line-strong-dark: "#4A5263"
-  on-surface-dark: "#E6E8EC"
-  on-surface-muted-dark: "#A3AAB6"
-  heading-dark: "#C9D3EA"
-  brand-dark: "#141821"
-  inspected-tint-dark: "#332B5C"
-  on-inspected-tint-dark: "#D2C7FF"
-  steered-tint-dark: "#1E3350"
-  on-steered-tint-dark: "#A9D0F7"
-  direct-tint-dark: "#183A33"
-  on-direct-tint-dark: "#98DECB"
-  untrusted-tint-dark: "#4A2220"
-  on-untrusted-tint-dark: "#F6B8B1"
-  neutral-tint-dark: "#2E323A"
-  on-neutral-tint-dark: "#C9CDD4"
+  ground-dark: "#0A0A0B"
+  surface-dark: "#111113"
+  surface-alt-dark: "#18181B"
+  line-dark: "#26262B"
+  line-strong-dark: "#3A3A41"
+  on-surface-dark: "#F2F2F4"
+  on-surface-muted-dark: "#9E9EA8"
+  heading-dark: "#F2F2F4"
+  brand-dark: "#000000"
+  inspected-tint-dark: "#221C3A"
+  on-inspected-tint-dark: "#C9BDFF"
+  steered-tint-dark: "#10223A"
+  on-steered-tint-dark: "#9EC7F7"
+  direct-tint-dark: "#0F2621"
+  on-direct-tint-dark: "#8FD6C2"
+  untrusted-tint-dark: "#2E1414"
+  on-untrusted-tint-dark: "#F2AAA3"
+  neutral-tint-dark: "#1E1E22"
+  on-neutral-tint-dark: "#C6C8CC"
+  on-brand-muted-dark: "#B3B3BB"
+  inspected-dark: "#7B61F0"
+  steered-dark: "#2F86E8"
+  direct-dark: "#20A088"
+  untrusted-dark: "#E0483F"
+  selected-row-dark: "#23232A"
 typography:
   body-md:
     fontFamily: Segoe UI Variable Text
@@ -176,7 +182,7 @@ components:
     backgroundColor: "{colors.inspected-tint}"
     textColor: "{colors.on-surface}"
   table-row-selected-dark:
-    backgroundColor: "{colors.inspected-tint-dark}"
+    backgroundColor: "{colors.selected-row-dark}"
     textColor: "{colors.on-surface-dark}"
   muted-text:
     backgroundColor: "{colors.surface}"
@@ -192,7 +198,7 @@ A tool a sales engineer keeps open beside the browser during live ZTNA demos, re
 
 ## Colors
 
-Status colours carry meaning and nothing else: violet = inspected, blue = steered to ZTNA but not inspected, teal = direct, red = untrusted. Inspection is not red, because in a ZTNA demo it means the product is working. Status colours appear as a solid 40px tile (white symbol), as tinted chips (tint background, dark ink), and as path-diagram connectors. Slate (`brand`) is the identity colour: app header, headings, primary button. Two themes: Flashbang (bright, the base tokens) and Dark (`*-dark` tokens, falling back to the base token where none is given). Every control, including scrollbars, tooltips, menus, checkboxes and table headers, takes its colours from the active theme; none keeps Windows' light defaults.
+Status colours carry meaning and nothing else: violet = inspected, blue = steered to ZTNA but not inspected, teal = direct, red = untrusted. Inspection is not red, because in a ZTNA demo it means the product is working. Status colours appear as a solid 40px tile (white symbol), as tinted chips (tint background, dark ink), and as path-diagram connectors. Slate (`brand`) is the identity colour: app header, headings, primary button. Two themes: Flashbang (bright, the base tokens) and Dark (`*-dark` tokens, falling back to the base token where none is given). Dark is "Ink": near-black neutrals with no blue cast, colour only where it carries meaning, and brighter status colours so they hold up on black; the selected table row is a neutral lift rather than a tint. Every control, including scrollbars, tooltips, menus, checkboxes and table headers, takes its colours from the active theme; none keeps Windows' light defaults.
 
 ## Typography
 

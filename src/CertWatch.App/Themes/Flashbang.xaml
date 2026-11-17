@@ -30,4 +30,5 @@
     <SolidColorBrush x:Key="NeutralTint" Color="#EEEFF1"/>
     <SolidColorBrush x:Key="OnNeutralTint" Color="#454545"/>
     <SolidColorBrush x:Key="OnStatus" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="SelectedRow" Color="#EEEAFB"/>
 </ResourceDictionary>

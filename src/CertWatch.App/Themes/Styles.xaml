@@ -371,7 +371,7 @@
     <Style TargetType="DataGridRow">
         <Setter Property="Background" Value="{DynamicResource Surface}"/>
         <Style.Triggers>
-            <Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="{DynamicResource InspectedTint}"/></Trigger>
+            <Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="{DynamicResource SelectedRow}"/></Trigger>
             <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource SurfaceAlt}"/></Trigger>
         </Style.Triggers>
     </Style>

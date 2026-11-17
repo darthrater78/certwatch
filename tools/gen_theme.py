@@ -12,17 +12,18 @@ TOKENS = dict(re.findall(r'^\s{2}([a-z0-9-]+):\s*"(#[0-9A-Fa-f]{6})"',
 
 # Brush key -> (Flashbang token, Dark token)
 KEYS = {
-    "Brand": ("brand", "brand-dark"), "OnBrand": ("on-brand", "on-brand"), "OnBrandMuted": ("on-brand-muted", "on-brand-muted"),
+    "Brand": ("brand", "brand-dark"), "OnBrand": ("on-brand", "on-brand"), "OnBrandMuted": ("on-brand-muted", "on-brand-muted-dark"),
     "Ground": ("ground", "ground-dark"), "Surface": ("surface", "surface-dark"), "SurfaceAlt": ("surface-alt", "surface-alt-dark"),
     "Line": ("line", "line-dark"), "LineStrong": ("line-strong", "line-strong-dark"), "OnSurface": ("on-surface", "on-surface-dark"),
     "OnSurfaceMuted": ("on-surface-muted", "on-surface-muted-dark"), "Heading": ("heading", "heading-dark"),
     "PrimaryButton": ("brand", "heading-dark"), "OnPrimaryButton": ("on-brand", "brand-dark"),
-    "Inspected": ("inspected", "inspected"), "InspectedTint": ("inspected-tint", "inspected-tint-dark"), "OnInspectedTint": ("on-inspected-tint", "on-inspected-tint-dark"),
-    "Steered": ("steered", "steered"), "SteeredTint": ("steered-tint", "steered-tint-dark"), "OnSteeredTint": ("on-steered-tint", "on-steered-tint-dark"),
-    "Direct": ("direct", "direct"), "DirectTint": ("direct-tint", "direct-tint-dark"), "OnDirectTint": ("on-direct-tint", "on-direct-tint-dark"),
-    "Untrusted": ("untrusted", "untrusted"), "UntrustedTint": ("untrusted-tint", "untrusted-tint-dark"), "OnUntrustedTint": ("on-untrusted-tint", "on-untrusted-tint-dark"),
+    "Inspected": ("inspected", "inspected-dark"), "InspectedTint": ("inspected-tint", "inspected-tint-dark"), "OnInspectedTint": ("on-inspected-tint", "on-inspected-tint-dark"),
+    "Steered": ("steered", "steered-dark"), "SteeredTint": ("steered-tint", "steered-tint-dark"), "OnSteeredTint": ("on-steered-tint", "on-steered-tint-dark"),
+    "Direct": ("direct", "direct-dark"), "DirectTint": ("direct-tint", "direct-tint-dark"), "OnDirectTint": ("on-direct-tint", "on-direct-tint-dark"),
+    "Untrusted": ("untrusted", "untrusted-dark"), "UntrustedTint": ("untrusted-tint", "untrusted-tint-dark"), "OnUntrustedTint": ("on-untrusted-tint", "on-untrusted-tint-dark"),
     "Neutral": ("on-surface-muted", "on-surface-muted-dark"), "NeutralTint": ("neutral-tint", "neutral-tint-dark"), "OnNeutralTint": ("on-neutral-tint", "on-neutral-tint-dark"),
     "OnStatus": ("on-status", "on-status"),
+    "SelectedRow": ("inspected-tint", "selected-row-dark"),
 }
 
 for theme, idx in (("Flashbang", 0), ("Dark", 1)):

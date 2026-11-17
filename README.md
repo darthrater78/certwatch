@@ -9,6 +9,41 @@ the active tab is **steered into the ZTNA tunnel** and whether its certificate w
 inspection**, with the path drawn out (browser → tunnel or direct → inspection → site). It calls
 out changes in pop-ups, flags mTLS sites, and keeps an encrypted per-site history.
 
+## Screenshots
+
+These are illustrations drawn from the app's own theme colours and layout, with invented example
+data (Contoso, Fabrikam and Adatum are fictitious names), not captures of a real session.
+
+**Steered to ZTNA, not inspected (Dark).** Edge on `crm.fabrikam.com`: traffic leaves through the
+Island Private Access tunnel, and the chain ends at a public root, so the certificate is the site's
+own. The path reads Edge → Island Private Access → site, and the facts show the route and the IP
+actually connected to.
+
+![CertWatch in the Dark theme, showing a site steered to ZTNA and not inspected](docs/screenshots/dark-steered.png)
+
+**Steered and inspected (Flashbang).** Brave on `news.adatum.com`: the certificate was replaced by
+Island's inspection CA, chaining to a private root this PC trusts, so the card turns violet, names
+the vendor, and adds the inspection step to the path.
+
+![CertWatch in the Flashbang theme, showing a site steered to ZTNA and inspected by Island](docs/screenshots/flashbang-inspected.png)
+
+**Pop-ups.** CertWatch's own cards in the corner of the screen when a site is steered, inspection
+is found, or traffic moves. Do not disturb doesn't hide them, so the audience sees them during a
+screen share.
+
+![A CertWatch pop-up in the corner of the screen announcing that inspection was found](docs/screenshots/popup.png)
+
+**History of a site.** Clicking a history entry shows that saved result on the card. Here
+`crm.fabrikam.com` was first seen direct over Wi-Fi, then moved into the tunnel when the ZTNA policy
+changed. **Back to live** returns to the current result.
+
+![The history of a site, with a saved result shown on the card and Back to live](docs/screenshots/history.png)
+
+**The log.** Every check, change and pop-up, with **Debug detail** for address-bar reads, routes
+and issuers.
+
+![The CertWatch log window with debug detail on](docs/screenshots/log.png)
+
 ## Run (on Windows)
 
 Run `CertWatch.exe`. Only one copy runs; starting it again brings the window forward. There's a tab
@@ -39,8 +74,10 @@ Closing the window keeps CertWatch in the tray (the icon takes the latest verdic
 from the tray menu, which also has **Show test pop-up**.
 
 Pop-ups are CertWatch's own small cards in the bottom-right corner, not Windows notifications, so
-Do not disturb (which Windows often turns on while you share your screen) doesn't hide them. They
-close after a few seconds, stay while the mouse is over them, and open CertWatch when clicked.
+Do not disturb (which Windows often turns on while you share your screen) doesn't hide them. By
+default they stay until you dismiss them (✕) or click them, which opens CertWatch. **Pop-ups** in the
+header switches between until dismissed, 10 s, 30 s and 1 min; a timed pop-up waits while the mouse
+is over it.
 
 Optional command-line switches:
 

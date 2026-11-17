@@ -7,11 +7,6 @@
         FontFamily="{StaticResource UiFont}" FontSize="13">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
-        <!-- One checkbox per browser; used by the Browsers… panel and the first-run page -->
-        <DataTemplate x:Key="BrowserChoiceTemplate">
-            <CheckBox Content="{Binding Name}" IsChecked="{Binding IsMonitored, Mode=TwoWay}" Margin="0,4"
-                      AutomationProperties.Name="{Binding Name, StringFormat=Monitor {0}}"/>
-        </DataTemplate>
     </Window.Resources>
     <DockPanel>
         <!-- App header: identity, version, required links, Browsers, Clear all, Log, Pop-ups, Theme -->
@@ -35,21 +30,8 @@
                         ToolTip="Open the log, with debug options"/>
                 <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}" Content="Clear _all…" Click="OnClearAll"
                         ToolTip="Clear every site's history in every browser, and the log"/>
-                <Button x:Name="BrowsersButton" DockPanel.Dock="Right" Style="{StaticResource HeaderButton}" Content="_Browsers…" Click="OnBrowsers"
+                <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}" Content="_Browsers…" Click="OnBrowsers"
                         ToolTip="Choose which browsers CertWatch monitors"/>
-                <Popup DockPanel.Dock="Right" IsOpen="{Binding BrowsersOpen, Mode=TwoWay}" StaysOpen="False"
-                       PlacementTarget="{Binding ElementName=BrowsersButton}" Placement="Bottom" AllowsTransparency="True">
-                    <Border Background="{DynamicResource SurfaceAlt}" BorderBrush="{DynamicResource LineStrong}" BorderThickness="1"
-                            CornerRadius="4" Padding="12,8" MinWidth="200">
-                        <StackPanel>
-                            <TextBlock Text="Monitor these browsers" FontWeight="SemiBold" Foreground="{DynamicResource OnSurface}" Margin="0,0,0,4"/>
-                            <ItemsControl ItemsSource="{Binding Choices}" ItemTemplate="{StaticResource BrowserChoiceTemplate}"
-                                          KeyboardNavigation.TabNavigation="Cycle" AutomationProperties.Name="Browsers to monitor"/>
-                            <TextBlock Text="Unticked browsers' address bars are never read." Style="{StaticResource Label}"
-                                       Margin="0,6,0,0" MaxWidth="240" TextWrapping="Wrap"/>
-                        </StackPanel>
-                    </Border>
-                </Popup>
             </DockPanel>
         </Border>
 
@@ -90,18 +72,18 @@
                     </Style>
                 </StackPanel.Style>
                 <TextBlock Text="{Binding EmptyText}" Style="{StaticResource Muted}" FontSize="15" TextWrapping="Wrap" TextAlignment="Center"/>
-                <!-- First run: nothing is monitored until a browser is ticked here or in Browsers… -->
-                <ItemsControl ItemsSource="{Binding Choices}" ItemTemplate="{StaticResource BrowserChoiceTemplate}"
-                              HorizontalAlignment="Center" Margin="0,16,0,0" AutomationProperties.Name="Browsers to monitor">
-                    <ItemsControl.Style>
-                        <Style TargetType="ItemsControl">
+                <!-- Nothing ticked (first run, or after "Monitor none"): one way in, the picker -->
+                <Button Content="_Choose browsers…" Click="OnBrowsers"
+                        HorizontalAlignment="Center" Margin="0,16,0,0">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource PrimaryButtonStyle}">
                             <Setter Property="Visibility" Value="Collapsed"/>
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding AnyChosen}" Value="False"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
                             </Style.Triggers>
                         </Style>
-                    </ItemsControl.Style>
-                </ItemsControl>
+                    </Button.Style>
+                </Button>
             </StackPanel>
         </Grid>
     </DockPanel>

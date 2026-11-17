@@ -6,13 +6,14 @@ All notable changes to CertWatch. Versions are the UTC date of the release.
 
 ### Added
 
-- **Browsers…** in the header: choose which browsers CertWatch monitors. The choice is saved;
-  unticking one stops reading its address bar and removes its tab, keeping its history.
+- Browser picker (first run, and **Browsers…** in the header): tick any number of browsers, then
+  apply. The choice is saved; dropping one stops reading its address bar and removes its tab,
+  keeping its history.
 
 ### Changed
 
-- First run monitors nothing until you tick a browser on the start page (earlier builds followed
-  every running browser automatically). `--browser` still adds a browser for that run.
+- First run monitors nothing until you pick browsers in the picker (earlier builds followed every
+  running browser automatically). `--browser` still adds a browser for that run.
 
 ### Security
 

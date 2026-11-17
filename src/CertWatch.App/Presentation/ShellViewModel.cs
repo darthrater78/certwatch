@@ -27,18 +27,12 @@ internal sealed class ShellViewModel : Observable
     private bool _hasTabs;
     public bool HasTabs { get => _hasTabs; set => Set(ref _hasTabs, value); }
 
-    /// <summary>One checkbox per catalog browser, shown in the header's Browsers… panel and on the empty page.</summary>
-    public ObservableCollection<BrowserChoice> Choices { get; } = [];
-
     private bool _anyChosen;
-    /// <summary>False until at least one browser is ticked; the empty page then shows the checkboxes.</summary>
+    /// <summary>False until at least one browser is ticked; the empty page then offers "Choose browsers…".</summary>
     public bool AnyChosen { get => _anyChosen; set => Set(ref _anyChosen, value); }
 
     private string _emptyText = "";
     public string EmptyText { get => _emptyText; set => Set(ref _emptyText, value); }
-
-    private bool _browsersOpen;
-    public bool BrowsersOpen { get => _browsersOpen; set => Set(ref _browsersOpen, value); }
 
     private string _themeText = "Theme";
     public string ThemeText { get => _themeText; set => Set(ref _themeText, value); }
@@ -48,17 +42,13 @@ internal sealed class ShellViewModel : Observable
 }
 
 /// <summary>A browser the user can tick to monitor. Unticked browsers' address bars are never read.</summary>
-internal sealed class BrowserChoice(string id, string name, bool monitored) : Observable
+internal sealed class BrowserChoice(string id, string name, bool monitored, bool running = false) : Observable
 {
     public string Id { get; } = id;
     public string Name { get; } = name;
+    /// <summary>Whether the browser's process was running when the picker opened (process names only).</summary>
+    public bool IsRunning { get; } = running;
 
     private bool _isMonitored = monitored;
-    public bool IsMonitored
-    {
-        get => _isMonitored;
-        set { if (Set(ref _isMonitored, value)) Toggled?.Invoke(this); }
-    }
-
-    public event Action<BrowserChoice>? Toggled;
+    public bool IsMonitored { get => _isMonitored; set => Set(ref _isMonitored, value); }
 }

@@ -72,15 +72,12 @@ public partial class MainWindow : Window
         _tray.SetState(StatusKind.Neutral, "CertWatch: waiting for a browser");
 
         _monitored.UnionWith(BrowserSelection.Normalize(_settings.MonitoredBrowsers));
-        foreach (var b in BrowserCatalog.All)
-        {
-            var choice = new BrowserChoice(b.Id, b.DisplayName, _monitored.Contains(b.Id));
-            choice.Toggled += OnBrowserToggled;
-            _shell.Choices.Add(choice);
-        }
         // Browsers named on the command line are an explicit choice for this run (not saved).
         foreach (var b in options.Browsers) AddSession(b);
         UpdateEmptyState();
+        // First run: nothing is monitored yet, so ask straight away (several can be ticked before Apply).
+        if (_settings.MonitoredBrowsers is null && options.Browsers.Count == 0)
+            ContentRendered += (_, _) => Dispatcher.BeginInvoke(ChooseBrowsers);
         ScanForBrowsers();
         _browserScan.Tick += (_, _) => ScanForBrowsers();
         _browserScan.Start();
@@ -95,16 +92,30 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnBrowserToggled(BrowserChoice choice)
+    /// <summary>Opens the picker; applies the whole selection at once, so tabs only change after Apply.</summary>
+    private void ChooseBrowsers()
     {
-        if (choice.IsMonitored) _monitored.Add(choice.Id);
-        else _monitored.Remove(choice.Id);
-        _settings.MonitoredBrowsers = BrowserSelection.Normalize(_monitored).ToList();
-        _settings.Save();
-        LogService.Info("app", $"{choice.Name}: {(choice.IsMonitored ? "monitored" : "not monitored")}");
+        var choices = BrowserCatalog.All.Select(b =>
+            new BrowserChoice(b.Id, b.DisplayName,
+                _monitored.Contains(b.Id) || _sessions.Any(s => s.Browser.Id == b.Id), // includes --browser ones
+                BrowserSession.IsRunning(b)));
+        var picker = new BrowserPickerWindow(choices) { Owner = this };
+        if (picker.ShowDialog() != true || picker.Selected is not { } selected) return;
+        ApplySelection(selected);
+    }
 
-        if (choice.IsMonitored) ScanForBrowsers();
-        else if (_sessions.FirstOrDefault(s => s.Browser.Id == choice.Id) is { } session) RemoveSession(session);
+    private void ApplySelection(IReadOnlyList<string> selected)
+    {
+        var chosen = BrowserSelection.Normalize(selected);
+        _monitored.Clear();
+        _monitored.UnionWith(chosen);
+        _settings.MonitoredBrowsers = chosen.ToList();
+        _settings.Save();
+        LogService.Info("app", chosen.Count == 0 ? "Monitoring no browsers" : $"Monitoring {string.Join(", ", chosen)}");
+
+        foreach (var session in _sessions.Where(s => BrowserCatalog.Find(s.Browser.Id) is not null && !_monitored.Contains(s.Browser.Id)).ToList())
+            RemoveSession(session);
+        ScanForBrowsers();
         UpdateEmptyState();
     }
 
@@ -128,14 +139,13 @@ public partial class MainWindow : Window
     private void UpdateEmptyState()
     {
         _shell.AnyChosen = _monitored.Count > 0 || _sessions.Count > 0;
-        var names = _shell.Choices.Where(c => c.IsMonitored).Select(c => c.Name).ToList();
+        var names = BrowserCatalog.All.Where(b => _monitored.Contains(b.Id)).Select(b => b.DisplayName).ToList();
         _shell.EmptyText = names.Count == 0
-            ? "Choose which browsers CertWatch monitors. It reads the address bar only of the browsers you tick."
+            ? "No browsers are monitored yet. Choose which ones CertWatch watches; it reads the address bar of those browsers only."
             : $"Monitoring {string.Join(", ", names)}. None of them is running: open one and its tab appears here.";
     }
 
-    // Opens only: a click while it's open first closes it (StaysOpen=False), so toggling would reopen-then-close.
-    private void OnBrowsers(object sender, RoutedEventArgs e) => _shell.BrowsersOpen = true;
+    private void OnBrowsers(object sender, RoutedEventArgs e) => ChooseBrowsers();
 
     private BrowserSession AddSession(BrowserDefinition browser)
     {

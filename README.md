@@ -18,8 +18,8 @@ site). It calls out changes in pop-ups, flags mTLS sites, and keeps an encrypted
 
 What CertWatch actually does, in order:
 
-1. **You choose which browsers to monitor.** Nothing is read until you tick a browser (on the
-   first-run page, or under **Browsers…**). Unticked browsers are never read.
+1. **You choose which browsers to monitor.** Nothing is read until you pick browsers (CertWatch
+   asks on first run; change it later with **Browsers…**). Browsers you didn't pick are never read.
 2. **It reads the address bar.** For each ticked browser it reads the address shown in the active
    tab, through Windows UI Automation, the accessibility interface screen readers use. It only reads
    the text. It never types into, clicks or controls the browser, and needs no extension.
@@ -89,12 +89,13 @@ and issuers.
 ## Run (on Windows)
 
 Run `CertWatch.exe`. Only one copy runs; starting it again brings the window forward. On first run
-it monitors nothing: tick the browsers you want on the start page, or later under **Browsers…** in
-the header (Edge, Chrome, Brave, Island, Vivaldi, Opera, Firefox). Your choice is saved. Each
-ticked browser gets a tab while it's running; the tab stays after it closes, and each follows its own
-browser, even in the background. Unticking a browser stops reading its address bar right away and
-removes its tab. Its history is kept and comes back if you tick it again. Browsers you haven't ticked
-are never read. Each tab header shows that browser's current site and verdict.
+it monitors nothing and asks which browsers to watch: tick as many as you like (Edge, Chrome, Brave,
+Island, Vivaldi, Opera, Firefox) and press **Monitor**. Change it any time with **Browsers…** in the
+header. Your choice is saved. Each chosen browser gets a tab while it's running; the tab stays after
+it closes, and each follows its own browser, even in the background. Dropping a browser in
+**Browsers…** stops reading its address bar right away and removes its tab. Its history is kept and
+comes back if you pick it again. Browsers you didn't pick are never read. Each tab header shows that
+browser's current site and verdict.
 
 In a tab:
 

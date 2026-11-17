@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
+using CertWatch.Core.Diagnostics;
 
 namespace CertWatch.Core.Cdp;
 
@@ -104,6 +105,7 @@ public sealed class CdpPipeClient : ICdpClient, IAsyncDisposable
         if (_closed) throw new CdpException("The demo browser's DevTools pipe is closed.");
 
         var id = Interlocked.Increment(ref _nextId);
+        Diag.Debug("devtools", () => $"→ {id} {method}{(sessionId is null ? "" : $" [session {sessionId}]")}");
         var tcs = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
         _pending[id] = tcs;
         try

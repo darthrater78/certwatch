@@ -12,9 +12,9 @@ internal sealed class BrowserFollower : IDisposable
     private readonly Thread _thread;
     private volatile bool _stopping;
 
-    public BrowserFollower(BrowserDefinition browser, SiteMonitor monitor, TimeSpan? pollInterval = null)
+    public BrowserFollower(BrowserDefinition browser, SiteMonitor monitor, Func<int, bool> acceptProcess, TimeSpan? pollInterval = null)
     {
-        _reader = new AddressBarReader(browser);
+        _reader = new AddressBarReader(browser, acceptProcess);
         _monitor = monitor;
         _pollInterval = pollInterval ?? TimeSpan.FromMilliseconds(700);
         _thread = new Thread(Run) { IsBackground = true, Name = $"CertWatch follower ({browser.Id})" };

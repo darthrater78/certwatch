@@ -15,6 +15,18 @@ internal sealed record DemoBrowser(CdpPipeClient Cdp, Process Process, string Pr
 /// </summary>
 internal static class DemoBrowserLauncher
 {
+    /// <summary>Explains what Launch for demo does and asks before doing it.</summary>
+    public static bool Confirm(string name) => System.Windows.MessageBox.Show(
+        $"Launch for demo opens a separate {name} window for your demo, in its own CertWatch tab.\n\n" +
+        $"What happens:\n" +
+        $"• {name} starts with its own CertWatch profile, so it won't have your usual bookmarks, sign-ins or extensions. Sign in there if the demo needs it; the profile is kept for next time.\n" +
+        $"• CertWatch connects to that window over a private pipe that only CertWatch holds (no network port), so it can see every open tab and the exact certificate {name} received for each site.\n" +
+        $"• A \"{name} · demo\" tab appears and checks all of that window's tabs, not just the one in front.\n\n" +
+        $"Your normal {name} windows keep working and stay on the normal {name} tab. Close the demo window to stop.\n\n" +
+        $"Why a separate profile: {name} doesn't allow remote debugging on your normal profile.\n\nContinue?",
+        $"CertWatch · Launch {name} for demo",
+        System.Windows.MessageBoxButton.OKCancel, System.Windows.MessageBoxImage.Information) == System.Windows.MessageBoxResult.OK;
+
     public static async Task<DemoBrowser> LaunchAsync(BrowserDefinition browser, CancellationToken ct = default)
     {
         var exe = FindExecutable(browser)

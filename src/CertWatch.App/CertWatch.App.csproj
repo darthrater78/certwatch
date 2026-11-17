@@ -12,6 +12,9 @@
     <!-- Lets the Windows-only app compile on the Linux build host. It must run on Windows. -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <AssemblyName>CertWatch</AssemblyName>
+    <!-- Date version (Gate 1). Shown in the app header and used for the release-notes link. -->
+    <Version>2026.11.16</Version>
+    <ApplicationIcon>Assets\CertWatch.ico</ApplicationIcon>
     <RootNamespace>CertWatch.App</RootNamespace>
     <!-- Needed by LibraryImport's generated P/Invoke stubs. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -23,6 +26,11 @@
     <Using Remove="System.Windows.Forms" />
   </ItemGroup>
 
+
+  <ItemGroup>
+    <Resource Include="Assets\CertWatch.ico" />
+    <Resource Include="Assets\CertWatch-256.png" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\CertWatch.Core\CertWatch.Core.csproj" />

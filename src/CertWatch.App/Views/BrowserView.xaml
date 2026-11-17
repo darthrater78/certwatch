@@ -1,10 +1,9 @@
 <UserControl x:Class="CertWatch.App.Views.BrowserView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <!-- One browser's tab: live verdict, every site seen once, and the selected site's history. -->
+    <!-- One browser tab (DESIGN.md): card (verdict, path, facts, notes) → open tabs (demo) → sites → history. -->
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
-        <!-- Collapses an element whose bound text is empty. -->
         <Style x:Key="HideWhenEmpty" TargetType="FrameworkElement">
             <Style.Triggers>
                 <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="">
@@ -12,198 +11,189 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
-    </UserControl.Resources>
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="24,16,24,24">
-            <!-- Mode strip: own connection (default) or exact mode via a demo browser. -->
-            <DockPanel Margin="0,0,0,14" LastChildFill="True">
-                <Button DockPanel.Dock="Right" Style="{StaticResource Plain}" Margin="12,0,0,0" Content="_Launch for demo"
-                        Command="{Binding LaunchDemoCommand}"
-                        Visibility="{Binding ShowLaunchButton, Converter={StaticResource BoolToVis}}"
-                        ToolTip="Opens this browser with a separate CertWatch profile so every open tab and the exact certificate it received can be read. Your normal windows keep working as before."/>
-                <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="{Binding ModeText}" Foreground="{StaticResource Ink}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                    <TextBlock Text="{Binding LaunchHelp}" Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0"
-                               Visibility="{Binding ShowLaunchButton, Converter={StaticResource BoolToVis}}"/>
+        <!-- Status chip used in every table: icon + short text, tinted by Status. -->
+        <DataTemplate x:Key="ChipCell">
+            <Border Style="{StaticResource StatusChip}">
+                <StackPanel Orientation="Horizontal">
+                    <Path Style="{StaticResource StatusIcon}" Width="11" Height="11" Margin="0,0,4,0" StrokeThickness="2.4"/>
+                    <TextBlock Style="{StaticResource StatusInk}" Text="{Binding Verdict}" FontSize="12" FontWeight="SemiBold"/>
                 </StackPanel>
-            </DockPanel>
+            </Border>
+        </DataTemplate>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource Surface}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="4"/>
+        </Style>
+    </UserControl.Resources>
 
-            <!-- Shown when the card displays a site picked from the list instead of the live tab. -->
-            <Border Background="#FDF0D8" CornerRadius="6" Padding="12,6" Margin="0,0,0,10"
-                    Visibility="{Binding ShowingSelected, Converter={StaticResource BoolToVis}}">
-                <DockPanel LastChildFill="True">
-                    <Button DockPanel.Dock="Right" Style="{StaticResource Plain}" Margin="12,0,0,0" MinHeight="28"
-                            Content="_Back to live" Command="{Binding BackToLiveCommand}"/>
-                    <TextBlock Text="{Binding CardNote}" Foreground="#7A4800" FontSize="12" FontWeight="SemiBold"
-                               TextWrapping="Wrap" VerticalAlignment="Center"/>
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{DynamicResource Surface}">
+        <StackPanel Margin="12,10,12,12">
+
+            <!-- Saved result on the card instead of the live tab -->
+            <Border Style="{StaticResource StatusTint}" DataContext="{Binding}" CornerRadius="4" Padding="10,4" Margin="0,0,0,8"
+                    Visibility="{Binding ShowingSaved, Converter={StaticResource BoolToVis}}">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Style="{StaticResource SmallButton}" Content="_Back to live" Command="{Binding BackToLiveCommand}" Margin="8,0,0,0"/>
+                    <TextBlock Text="{Binding CardNote}" TextWrapping="Wrap" VerticalAlignment="Center" FontWeight="SemiBold"/>
                 </DockPanel>
             </Border>
 
             <!-- Verdict card -->
-            <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="8">
+            <Border Style="{StaticResource Card}">
                 <StackPanel>
-                    <Border Background="{Binding VerdictBrush}" CornerRadius="7,7,0,0" Padding="22,16">
-                        <StackPanel>
-                            <TextBlock Foreground="White" Opacity="0.9" FontSize="12">
-                                <Run Text="NOW VIEWING · "/><Run Text="{Binding Site, Mode=OneWay}"/>
-                            </TextBlock>
-                            <TextBlock Text="{Binding Headline}" Foreground="White" FontSize="26" FontWeight="Bold" TextWrapping="Wrap"/>
-                            <TextBlock Text="{Binding Subline}" Foreground="White" Opacity="0.95" FontSize="13" TextWrapping="Wrap"/>
-                            <Border Background="White" CornerRadius="10" Padding="10,3" Margin="0,8,0,0" HorizontalAlignment="Left">
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding PastInspection}" Value="">
-                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <TextBlock Text="{Binding PastInspection}" Foreground="#4A2FB0" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                    <Border Style="{StaticResource StatusTint}" DataContext="{Binding Card}" CornerRadius="3,3,0,0" Padding="12,10"
+                            BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1">
+                        <DockPanel>
+                            <Border DockPanel.Dock="Left" Style="{StaticResource StatusSolid}" Width="40" Height="40" CornerRadius="4" Margin="0,0,12,0" VerticalAlignment="Center">
+                                <Path Style="{StaticResource StatusIcon}" Stroke="{DynamicResource OnStatus}" Width="22" Height="22"/>
                             </Border>
-                        </StackPanel>
-                    </Border>
-
-                    <Grid Margin="22,18,22,6">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="24"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
-                            <TextBlock Text="WHAT CERTWATCH SAW ON THIS BROWSER'S PATH" FontSize="12" FontWeight="Bold"
-                                       Foreground="{Binding VerdictBrush}" Margin="0,0,0,10"/>
-                            <TextBlock Style="{StaticResource Label}" Text="Issued by"/>
-                            <TextBlock Style="{StaticResource Value}" Text="{Binding Issuer}" FontWeight="SemiBold"/>
-                            <TextBlock Style="{StaticResource Label}" Text="Root"/>
-                            <TextBlock Style="{StaticResource Value}" Text="{Binding Root}"/>
-                            <TextBlock Style="{StaticResource Label}" Text="Valid until"/>
-                            <TextBlock Style="{StaticResource Value}" Text="{Binding ValidUntil}"/>
-                            <TextBlock Style="{StaticResource Label}" Text="SHA-256 fingerprint"/>
-                            <TextBlock Style="{StaticResource Value}" Text="{Binding Fingerprint}" FontFamily="{StaticResource MonoFont}" FontSize="12"/>
-                        </StackPanel>
-                        <StackPanel Grid.Column="2">
-                            <TextBlock Text="CONNECTION" FontSize="12" FontWeight="Bold" Foreground="{StaticResource Muted}" Margin="0,0,0,10"/>
-                            <TextBlock Style="{StaticResource Label}" Text="How we know"/>
-                            <TextBlock Style="{StaticResource Value}" Text="{Binding SourceText}"/>
-                            <Border Background="#FDF0D8" CornerRadius="6" Padding="10,6" Margin="0,0,0,12"
-                                    Tag="{Binding DifferNote}" Style="{StaticResource HideWhenEmpty}">
-                                <TextBlock Text="{Binding DifferNote}" Foreground="#7A4800" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                            </Border>
-                            <TextBlock Style="{StaticResource Label}" Text="Why"/>
-                            <TextBlock Style="{StaticResource Value}" Text="{Binding Reason}"/>
-                            <TextBlock Style="{StaticResource Label}" Text="Protocol"/>
-                            <TextBlock Style="{StaticResource Value}" Text="{Binding Protocol}"/>
-                            <TextBlock Style="{StaticResource Label}" Text="Egress"/>
-                            <Border Background="{Binding EgressBrush}" CornerRadius="10" Padding="8,1" HorizontalAlignment="Left" Margin="0,2,0,4">
-                                <TextBlock Text="{Binding EgressKind}" Foreground="White" FontSize="12" FontWeight="SemiBold"/>
-                            </Border>
-                            <TextBlock Style="{StaticResource Value}" Text="{Binding EgressReason}" Margin="0,0,0,6"/>
-                            <TextBlock Style="{StaticResource Label}" Text="Interface"/>
-                            <TextBlock Style="{StaticResource Value}" Text="{Binding EgressInterface}"/>
-                            <TextBlock Style="{StaticResource Label}" Text="Route"/>
-                            <TextBlock Style="{StaticResource Value}" FontFamily="{StaticResource MonoFont}" FontSize="12">
-                                <Run Text="{Binding RemoteAddress, Mode=OneWay}"/><Run Text="  ·  "/><Run Text="{Binding EgressRoute, Mode=OneWay}"/>
-                            </TextBlock>
-                            <TextBlock Style="{StaticResource Label}" Text="Proxy"/>
-                            <TextBlock Style="{StaticResource Value}" Text="{Binding NetworkPath}"/>
-                            <TextBlock Style="{StaticResource Label}" Text="Address bar"/>
-                            <TextBlock Style="{StaticResource Value}" Text="{Binding AddressText}" Foreground="{StaticResource Muted}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
-                            <Border Background="#FDF0D8" CornerRadius="12" Padding="10,3" HorizontalAlignment="Left" Margin="0,0,0,12">
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding MutualTls}" Value="True">
-                                                <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <TextBlock Text="mTLS: server asks for a client certificate, so it needs a bypass rule" Foreground="#7A4800" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                            </Border>
-                        </StackPanel>
-                    </Grid>
-
-                    <Border BorderBrush="#E3E5E8" BorderThickness="0,1,0,0" Padding="22,12">
-                        <DockPanel LastChildFill="False">
-                            <Button Style="{StaticResource Plain}" Content="_Re-check now" Command="{Binding RecheckCommand}"/>
-                            <Button Style="{StaticResource Plain}" Content="_Copy fingerprint" Command="{Binding CopyFingerprintCommand}"/>
-                            <Button Style="{StaticResource Plain}" Content="_Export root…" Command="{Binding ExportRootCommand}"
-                                    ToolTip="Save this site's root certificate (.cer or .pem) or the full chain"/>
-                            <TextBlock DockPanel.Dock="Right" Text="{Binding LastChecked}" Foreground="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center"/>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0"
+                                        DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                                <Button Content="_Re-check" Command="{Binding RecheckCommand}" Margin="0,0,6,0"/>
+                                <Button Content="_Copy SHA-256" Command="{Binding CopyFingerprintCommand}" Margin="0,0,6,0"/>
+                                <Button Content="_Export root" Command="{Binding ExportRootCommand}" Margin="0,0,6,0"
+                                        ToolTip="Save this site's root certificate (.cer or .pem) or the full chain"/>
+                                <Button Style="{StaticResource PrimaryButton}" Content="_Launch for demo" Command="{Binding LaunchDemoCommand}"
+                                        Visibility="{Binding CanLaunchDemo, Converter={StaticResource BoolToVis}}"
+                                        ToolTip="Optional. Opens a separate window of this browser, in its own CertWatch tab, so every open tab and the exact certificate the browser received can be read. Your normal windows keep working here."/>
+                            </StackPanel>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Style="{StaticResource StatusInk}" Text="{Binding Context}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Style="{StaticResource StatusInk}" Text="{Binding Headline}" FontFamily="{StaticResource DisplayFont}"
+                                           FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock Style="{StaticResource StatusInk}" Text="{Binding Subline}" FontSize="12" TextWrapping="Wrap" Opacity="0.9"/>
+                            </StackPanel>
                         </DockPanel>
                     </Border>
+
+                    <!-- Path diagram: browser → tunnel/direct → inspection → site -->
+                    <ItemsControl ItemsSource="{Binding Card.Path}" Margin="12,10" Focusable="False"
+                                  AutomationProperties.Name="Path the traffic takes">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" Margin="0,2">
+                                    <Border BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="4" Padding="5,4,10,4" Background="{DynamicResource Surface}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Border Style="{StaticResource StatusTint}" Width="24" Height="24" CornerRadius="4" Margin="0,0,8,0">
+                                                <Path Data="{Binding Icon}" Style="{StaticResource StatusIcon}" Width="14" Height="14"/>
+                                            </Border>
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                                                <TextBlock Text="{Binding Sub}" Style="{StaticResource Label}"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0"
+                                                Visibility="{Binding HasArrow, Converter={StaticResource BoolToVis}}">
+                                        <Rectangle Style="{StaticResource Connector}" Width="28"/>
+                                        <Path Style="{StaticResource ConnectorHead}" Width="7" Height="10" Stretch="Fill"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- Facts: 4 columns -->
+                    <ItemsControl ItemsSource="{Binding Card.Facts}" Margin="12,0,12,8" Focusable="False">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><UniformGrid Columns="4"/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="0,2,16,4" ToolTip="{Binding ToolTipText}">
+                                    <TextBlock Text="{Binding Label}" Style="{StaticResource Label}"/>
+                                    <TextBlock Text="{Binding Value}" TextTrimming="CharacterEllipsis">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Mono}" Value="True">
+                                                        <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                                                        <Setter Property="FontSize" Value="12"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- Notes: browser/own-connection mismatch, mTLS, earlier inspection -->
+                    <ItemsControl ItemsSource="{Binding Card.Notes}" Margin="12,0,12,10" Focusable="False">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource StatusTint}" CornerRadius="4" Padding="8,4" Margin="0,0,0,4">
+                                    <TextBlock Style="{StaticResource StatusInk}" Text="{Binding Text}" TextWrapping="Wrap" FontWeight="SemiBold" FontSize="12"/>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 </StackPanel>
             </Border>
 
-            <!-- Each site once: its current state. Selecting one shows its history below. -->
-            <!-- Exact mode: every HTTPS tab open in the demo browser. -->
-            <StackPanel Visibility="{Binding DemoActive, Converter={StaticResource BoolToVis}}">
-                <TextBlock Text="Open tabs in the demo browser" FontSize="18" FontWeight="SemiBold" Margin="0,22,0,8"/>
-                <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="8" Padding="2">
-                    <DataGrid ItemsSource="{Binding OpenTabs}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
-                              GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#EEF0F2" BorderThickness="0" Background="White"
-                              RowBackground="White" MinHeight="80" MaxHeight="260" CanUserResizeRows="False"
-                              AutomationProperties.Name="Open tabs in the demo browser">
+            <!-- Demo tab: the demo window's open tabs -->
+            <StackPanel Visibility="{Binding HasOpenTabs, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="Open tabs in the demo window" Style="{StaticResource SectionTitle}" Margin="0,12,0,6"/>
+                <Border Style="{StaticResource Card}">
+                    <DataGrid ItemsSource="{Binding OpenTabs}" MaxHeight="220" AutomationProperties.Name="Open tabs in the demo window">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Tab" Binding="{Binding Title}" Width="3*"/>
                             <DataGridTextColumn Header="Site" Binding="{Binding Site}" Width="2*"/>
-                            <DataGridTemplateColumn Header="Now" Width="Auto" SortMemberPath="Verdict">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <Border Background="{Binding VerdictBrush}" CornerRadius="10" Padding="8,1" Margin="2" HorizontalAlignment="Left">
-                                            <TextBlock Text="{Binding Verdict}" Foreground="White" FontSize="12" FontWeight="SemiBold"/>
-                                        </Border>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="Now" Width="Auto" CellTemplate="{StaticResource ChipCell}"/>
                             <DataGridTextColumn Header="Egress" Binding="{Binding Egress}" Width="2*"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </Border>
             </StackPanel>
 
-            <DockPanel Margin="0,22,0,8" LastChildFill="False">
-                <TextBlock Text="Sites seen in this browser" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                <Button DockPanel.Dock="Right" Style="{StaticResource Plain}" Margin="8,0,0,0" Content="Clear _all history"
-                        Command="{Binding ClearAllHistoryCommand}" ToolTip="Clear every site's history in every browser"/>
-                <Button DockPanel.Dock="Right" Style="{StaticResource Plain}" Margin="8,0,0,0" Content="Clear _selected site"
-                        Command="{Binding ClearSiteHistoryCommand}" ToolTip="Clear the selected site's history for this browser"/>
+            <!-- Sites: each once -->
+            <DockPanel Margin="0,12,0,6" LastChildFill="False">
+                <TextBlock Text="Sites" Style="{StaticResource SectionTitle}"/>
+                <TextBlock Text="{Binding SiteCount}" Style="{StaticResource Muted}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                <Button DockPanel.Dock="Right" Style="{StaticResource SmallButton}" Content="Clear e_verything…" Command="{Binding ClearEverythingCommand}" Margin="6,0,0,0"
+                        ToolTip="Clear every site's history in every browser, and the log"/>
+                <Button DockPanel.Dock="Right" Style="{StaticResource SmallButton}" Content="Clear _site" Command="{Binding ClearSiteCommand}" Margin="6,0,0,0"
+                        ToolTip="Clear the selected site's history for this browser"/>
+                <TextBox DockPanel.Dock="Right" Width="170" Text="{Binding SiteFilter, UpdateSourceTrigger=PropertyChanged}"
+                         AutomationProperties.Name="Filter sites" ToolTip="Filter sites by name"/>
+                <TextBlock DockPanel.Dock="Right" Text="Filter" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,6,0"/>
             </DockPanel>
-            <Border Background="#E2EEFA" CornerRadius="6" Padding="10,6" Margin="0,0,0,8"
+            <Border Background="{DynamicResource SteeredTint}" CornerRadius="4" Padding="8,4" Margin="0,0,0,6"
                     Tag="{Binding StatusMessage}" Style="{StaticResource HideWhenEmpty}">
-                <TextBlock Text="{Binding StatusMessage}" Foreground="#084A8C" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding StatusMessage}" Foreground="{DynamicResource OnSteeredTint}" FontWeight="SemiBold" FontSize="12" TextWrapping="Wrap"/>
             </Border>
-            <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="8" Padding="2">
-                <DataGrid ItemsSource="{Binding Sites}" SelectedItem="{Binding SelectedSite, Mode=TwoWay}"
-                          SelectionMode="Single"
-                          AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
-                          GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#EEF0F2" BorderThickness="0" Background="White"
-                          RowBackground="White" MinHeight="140" MaxHeight="320" CanUserResizeRows="False"
+            <Border Style="{StaticResource Card}">
+                <DataGrid ItemsSource="{Binding SitesView}" SelectedItem="{Binding SelectedSite, Mode=TwoWay}" MinHeight="90" MaxHeight="300"
                           AutomationProperties.Name="Sites seen in this browser">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Site" Binding="{Binding Host}" Width="2*"/>
-                        <DataGridTemplateColumn Header="Now" Width="Auto" SortMemberPath="Verdict">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <Border Background="{Binding VerdictBrush}" CornerRadius="10" Padding="8,1" Margin="2" HorizontalAlignment="Left">
-                                        <TextBlock Text="{Binding Verdict}" Foreground="White" FontSize="12" FontWeight="SemiBold"/>
-                                    </Border>
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="Site" Binding="{Binding Host}" Width="2*" FontWeight="SemiBold"/>
+                        <DataGridTemplateColumn Header="Now" Width="Auto" SortMemberPath="Verdict" CellTemplate="{StaticResource ChipCell}"/>
                         <DataGridTextColumn Header="Issuer" Binding="{Binding Issuer}" Width="2*"/>
+                        <DataGridTextColumn Header="Egress" Binding="{Binding Egress}" Width="2*"/>
                         <DataGridTemplateColumn Header="Inspection" Width="2*" SortMemberPath="Inspection">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding Inspection}" Foreground="{Binding InspectionBrush}" FontWeight="SemiBold"
-                                               TextTrimming="CharacterEllipsis" ToolTip="{Binding Inspection}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Inspection}" ToolTip="{Binding Inspection}" TextTrimming="CharacterEllipsis">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource Muted}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding InspectionStatus}" Value="Inspected">
+                                                        <Setter Property="Foreground" Value="{DynamicResource OnInspectedTint}"/>
+                                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Egress" Binding="{Binding Egress}" Width="2*"/>
-                        <DataGridTextColumn Header="Last change" Binding="{Binding LastChange}" Width="2*"/>
                         <DataGridTextColumn Header="Changes" Binding="{Binding ChangeCount}" Width="Auto"/>
                         <DataGridTextColumn Header="Last seen" Binding="{Binding LastSeenText}" SortMemberPath="LastSeen" Width="Auto"/>
                         <DataGridTextColumn Header="" Binding="{Binding MutualTls}" Width="Auto"/>
@@ -211,26 +201,16 @@
                 </DataGrid>
             </Border>
 
-            <TextBlock Text="{Binding SiteHistoryTitle}" FontSize="16" FontWeight="SemiBold" Margin="0,18,0,8"/>
-            <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="8" Padding="2">
-                <DataGrid ItemsSource="{Binding SiteHistory}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
-                          GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#EEF0F2" BorderThickness="0" Background="White"
-                          RowBackground="White" MinHeight="100" MaxHeight="280" CanUserResizeRows="False" CanUserSortColumns="False"
-                          AutomationProperties.Name="History for the selected site">
+            <!-- History of the selected site: click an entry to show it on the card -->
+            <TextBlock Text="{Binding HistoryTitle}" Style="{StaticResource SectionTitle}" Margin="0,12,0,6"/>
+            <Border Style="{StaticResource Card}">
+                <DataGrid ItemsSource="{Binding History}" SelectedItem="{Binding SelectedHistory, Mode=TwoWay}" MinHeight="60" MaxHeight="240"
+                          CanUserSortColumns="False" AutomationProperties.Name="History for the selected site">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="Auto"/>
-                        <DataGridTemplateColumn Header="Verdict" Width="Auto">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <Border Background="{Binding VerdictBrush}" CornerRadius="10" Padding="8,1" Margin="2" HorizontalAlignment="Left">
-                                        <TextBlock Text="{Binding Verdict}" Foreground="White" FontSize="12" FontWeight="SemiBold"/>
-                                    </Border>
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Issuer" Binding="{Binding Issuer}" Width="2*"/>
-                        <DataGridTextColumn Header="Egress" Binding="{Binding Egress}" Width="2*"/>
+                        <DataGridTemplateColumn Header="Verdict" Width="Auto" CellTemplate="{StaticResource ChipCell}"/>
                         <DataGridTextColumn Header="Change" Binding="{Binding Change}" Width="2*"/>
+                        <DataGridTextColumn Header="Egress" Binding="{Binding Egress}" Width="2*"/>
                         <DataGridTextColumn Header="" Binding="{Binding MutualTls}" Width="Auto"/>
                     </DataGrid.Columns>
                 </DataGrid>

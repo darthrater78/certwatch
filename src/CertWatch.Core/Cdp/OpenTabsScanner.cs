@@ -1,4 +1,5 @@
 using CertWatch.Core.Browsers;
+using CertWatch.Core.Diagnostics;
 using CertWatch.Core.Monitoring;
 
 namespace CertWatch.Core.Cdp;
@@ -62,8 +63,9 @@ public sealed class OpenTabsScanner : IAsyncDisposable
             {
                 return;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                Diag.Warn("demo", $"Listing demo tabs failed ({failures + 1}/3): {ex.Message}");
                 if (++failures >= 3)
                 {
                     BrowserGone?.Invoke();

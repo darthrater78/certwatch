@@ -1,6 +1,7 @@
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using CertWatch.Core.Browsers;
+using CertWatch.Core.Diagnostics;
 using CertWatch.Core.Tls;
 
 namespace CertWatch.Core.Cdp;
@@ -57,7 +58,8 @@ public sealed class BrowserCertProbe(ICertProbe ownConnection) : ICertProbe
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
-            // Debugging endpoint gone or busy: fall back to the own-connection result.
+            // DevTools pipe gone or busy: fall back to the own-connection result.
+            Diag.Warn("devtools", $"Exact certificate for {endpoint} unavailable, using own connection: {ex.Message}");
             return own;
         }
     }

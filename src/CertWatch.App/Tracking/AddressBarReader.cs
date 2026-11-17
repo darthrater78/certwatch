@@ -10,7 +10,7 @@ namespace CertWatch.App.Tracking;
 /// browser that did, so each CertWatch instance stays live even when its browser is in the background.
 /// Must be called from a background (MTA) thread, never the UI thread.
 /// </summary>
-internal sealed class AddressBarReader(BrowserDefinition browser)
+internal sealed class AddressBarReader(BrowserDefinition browser, Func<int, bool> acceptProcess)
 {
     private readonly HashSet<string> _processNames = new(browser.ProcessNames, StringComparer.OrdinalIgnoreCase);
     private IntPtr _window;
@@ -73,7 +73,7 @@ internal sealed class AddressBarReader(BrowserDefinition browser)
         var foreground = Native.GetForegroundWindow();
         if (foreground != IntPtr.Zero && BelongsToBrowser(foreground)) return foreground;
 
-        if (_window != IntPtr.Zero && Native.IsWindow(_window) && Native.IsWindowVisible(_window)) return _window;
+        if (_window != IntPtr.Zero && Native.IsWindow(_window) && Native.IsWindowVisible(_window) && BelongsToBrowser(_window)) return _window;
 
         foreach (var name in _processNames)
         {
@@ -81,7 +81,7 @@ internal sealed class AddressBarReader(BrowserDefinition browser)
             {
                 using (process)
                 {
-                    if (process.MainWindowHandle != IntPtr.Zero) return process.MainWindowHandle;
+                    if (process.MainWindowHandle != IntPtr.Zero && acceptProcess(process.Id)) return process.MainWindowHandle;
                 }
             }
         }
@@ -95,7 +95,7 @@ internal sealed class AddressBarReader(BrowserDefinition browser)
         try
         {
             using var process = Process.GetProcessById((int)pid);
-            return _processNames.Contains(process.ProcessName);
+            return _processNames.Contains(process.ProcessName) && acceptProcess((int)pid);
         }
         catch (ArgumentException)
         {

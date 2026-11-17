@@ -1,0 +1,33 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Light theme. Generated from the colour tokens in DESIGN.md; edit the tokens, not this file. -->
+    <SolidColorBrush x:Key="Brand" Color="#1F2A44"/>
+    <SolidColorBrush x:Key="OnBrand" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="OnBrandMuted" Color="#C5CCDB"/>
+    <SolidColorBrush x:Key="Ground" Color="#EEF0F4"/>
+    <SolidColorBrush x:Key="Surface" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="SurfaceAlt" Color="#F7F8FA"/>
+    <SolidColorBrush x:Key="Line" Color="#DDE1E7"/>
+    <SolidColorBrush x:Key="LineStrong" Color="#C9CDD3"/>
+    <SolidColorBrush x:Key="OnSurface" Color="#1B1B1B"/>
+    <SolidColorBrush x:Key="OnSurfaceMuted" Color="#5C5C5C"/>
+    <SolidColorBrush x:Key="Heading" Color="#1F2A44"/>
+    <SolidColorBrush x:Key="PrimaryButton" Color="#1F2A44"/>
+    <SolidColorBrush x:Key="OnPrimaryButton" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="Inspected" Color="#5B3FC4"/>
+    <SolidColorBrush x:Key="InspectedTint" Color="#EEEAFB"/>
+    <SolidColorBrush x:Key="OnInspectedTint" Color="#3F2A99"/>
+    <SolidColorBrush x:Key="Steered" Color="#0A5FB4"/>
+    <SolidColorBrush x:Key="SteeredTint" Color="#E6F0FA"/>
+    <SolidColorBrush x:Key="OnSteeredTint" Color="#084A8C"/>
+    <SolidColorBrush x:Key="Direct" Color="#0E6B5C"/>
+    <SolidColorBrush x:Key="DirectTint" Color="#E5F3EF"/>
+    <SolidColorBrush x:Key="OnDirectTint" Color="#0B5546"/>
+    <SolidColorBrush x:Key="Untrusted" Color="#B3261E"/>
+    <SolidColorBrush x:Key="UntrustedTint" Color="#FBE9E7"/>
+    <SolidColorBrush x:Key="OnUntrustedTint" Color="#8C1D17"/>
+    <SolidColorBrush x:Key="Neutral" Color="#5C5C5C"/>
+    <SolidColorBrush x:Key="NeutralTint" Color="#EEEFF1"/>
+    <SolidColorBrush x:Key="OnNeutralTint" Color="#454545"/>
+    <SolidColorBrush x:Key="OnStatus" Color="#FFFFFF"/>
+</ResourceDictionary>

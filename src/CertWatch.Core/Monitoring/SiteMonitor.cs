@@ -1,5 +1,6 @@
 using System.Security.Cryptography.X509Certificates;
 using CertWatch.Core.Browsers;
+using CertWatch.Core.Diagnostics;
 using CertWatch.Core.History;
 using CertWatch.Core.Network;
 using CertWatch.Core.Tls;
@@ -85,9 +86,10 @@ public sealed class SiteMonitor : IAsyncDisposable
             {
                 return;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // Never let one bad check kill monitoring; wait and try again.
+                // Never let one bad check kill monitoring; log it, wait and try again.
+                Diag.Error(_browserId, $"Check failed: {ex.GetType().Name}: {ex.Message}");
                 try { await Task.Delay(TimeSpan.FromSeconds(2), _stop.Token); } catch (OperationCanceledException) { return; }
             }
         }
@@ -105,9 +107,10 @@ public sealed class SiteMonitor : IAsyncDisposable
             {
                 if (_routes.Lookup(remote) is { } facts) egress = EgressClassifier.Classify(facts);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 // Route lookup is best-effort; the certificate verdict stands on its own.
+                Diag.Warn(_browserId, $"Route lookup for {remote} failed: {ex.Message}");
             }
         }
 

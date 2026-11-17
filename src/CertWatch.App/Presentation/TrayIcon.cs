@@ -2,21 +2,20 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 using CertWatch.App.Tracking;
-using CertWatch.Core.Trust;
 
 namespace CertWatch.App.Presentation;
 
 /// <summary>
-/// One tray icon per CertWatch instance: a verdict-coloured disc with the followed browser's initial,
-/// so two instances (e.g. Edge and Island) are told apart at a glance.
+/// The tray icon: the CertWatch shield-and-split-path symbol on a tile coloured by the latest
+/// verdict (slate while waiting). Windows notifications go through <see cref="WindowsNotifier"/>,
+/// with tray balloons as the fallback.
 /// </summary>
 internal sealed class TrayIcon : IDisposable
 {
     private readonly NotifyIcon _icon;
-    private IntPtr _currentHicon;
-    private string _initial = "?";
-    private Verdict? _verdict;
     private readonly WindowsNotifier? _toasts;
+    private IntPtr _currentHicon;
+    private StatusKind _status = StatusKind.Neutral;
 
     public event Action? OpenRequested;
     public event Action? RecheckRequested;
@@ -47,24 +46,13 @@ internal sealed class TrayIcon : IDisposable
         Redraw();
     }
 
-    public void SetBrowser(string displayName)
+    public void SetState(StatusKind status, string tooltip)
     {
-        _initial = displayName.Length > 0 ? displayName[..1].ToUpperInvariant() : "?";
+        _status = status;
+        _icon.Text = tooltip.Length > 127 ? tooltip[..124] + "..." : tooltip; // NotifyIcon limit
         Redraw();
     }
 
-    public void SetState(Verdict? verdict, string tooltip)
-    {
-        _verdict = verdict;
-        // NotifyIcon tooltips are limited to 127 characters.
-        _icon.Text = tooltip.Length > 127 ? tooltip[..124] + "..." : tooltip;
-        Redraw();
-    }
-
-    /// <summary>
-    /// Shows a Windows notification (Action Center toast). Falls back to a tray balloon if toasts
-    /// aren't available. Windows still hides both while Do not disturb / Focus is on.
-    /// </summary>
     public void Notify(string title, string text, bool important)
     {
         try
@@ -82,19 +70,41 @@ internal sealed class TrayIcon : IDisposable
         _icon.ShowBalloonTip(5000, title, text, important ? ToolTipIcon.Warning : ToolTipIcon.Info);
     }
 
+    private static Color TileColor(StatusKind s) => s switch
+    {
+        StatusKind.Inspected => Color.FromArgb(0x5B, 0x3F, 0xC4),
+        StatusKind.Steered => Color.FromArgb(0x0A, 0x5F, 0xB4),
+        StatusKind.Direct => Color.FromArgb(0x0E, 0x6B, 0x5C),
+        StatusKind.Untrusted => Color.FromArgb(0xB3, 0x26, 0x1E),
+        _ => Color.FromArgb(0x1F, 0x2A, 0x44),
+    };
+
+    /// <summary>Draws the symbol at 32px from the same 64-unit geometry as Assets/CertWatch.svg.</summary>
     private void Redraw()
     {
-        var c = VerdictStyle.ColorOf(_verdict);
         using var bmp = new Bitmap(32, 32);
         using (var g = Graphics.FromImage(bmp))
         {
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
-            using var fill = new SolidBrush(System.Drawing.Color.FromArgb(c.R, c.G, c.B));
-            g.FillEllipse(fill, 1, 1, 30, 30);
-            using var font = new Font("Segoe UI", 15, System.Drawing.FontStyle.Bold, GraphicsUnit.Pixel);
-            var size = g.MeasureString(_initial, font);
-            g.DrawString(_initial, font, Brushes.White, (32 - size.Width) / 2, (32 - size.Height) / 2);
+            g.ScaleTransform(0.5f, 0.5f);
+            using (var tile = RoundedRect(0, 0, 64, 64, 14))
+            using (var fill = new SolidBrush(TileColor(_status)))
+                g.FillPath(fill, tile);
+
+            using var pen = new Pen(Color.White, 5.5f) { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round };
+            using (var shield = new GraphicsPath())
+            {
+                shield.AddLine(32, 9, 50, 16);
+                shield.AddLine(50, 16, 50, 31);
+                shield.AddBezier(50, 31, 50, 43, 42, 51, 32, 55);
+                shield.AddBezier(32, 55, 22, 51, 14, 43, 14, 31);
+                shield.AddLine(14, 31, 14, 16);
+                shield.CloseFigure();
+                g.DrawPath(pen, shield);
+            }
+            g.DrawLine(pen, 32, 46, 32, 37);
+            g.DrawLine(pen, 32, 37, 24, 28);
+            g.DrawLine(pen, 32, 37, 40, 28);
         }
 
         var hicon = bmp.GetHicon();
@@ -103,6 +113,18 @@ internal sealed class TrayIcon : IDisposable
         old?.Dispose();
         if (_currentHicon != IntPtr.Zero) Native.DestroyIcon(_currentHicon);
         _currentHicon = hicon;
+    }
+
+    private static GraphicsPath RoundedRect(float x, float y, float w, float h, float r)
+    {
+        var p = new GraphicsPath();
+        var d = r * 2;
+        p.AddArc(x, y, d, d, 180, 90);
+        p.AddArc(x + w - d, y, d, d, 270, 90);
+        p.AddArc(x + w - d, y + h - d, d, d, 0, 90);
+        p.AddArc(x, y + h - d, d, d, 90, 90);
+        p.CloseFigure();
+        return p;
     }
 
     public void Dispose()

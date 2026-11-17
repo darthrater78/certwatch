@@ -1,16 +1,43 @@
 # CertWatch
 
-Windows app for ZTNA demos. It follows one browser's active tab and shows whether the site's
-certificate is the site's own (**not inspected**) or was replaced by an inspection proxy
-(**inspected**). It calls out changes, flags mTLS sites, and keeps a per-site history.
+<img src="src/CertWatch.App/Assets/CertWatch-256.png" width="64" align="right" alt="CertWatch icon">
+
+**[GitHub](https://github.com/darthrater78/certwatch)** · **[Release notes for v2026.11.16](https://github.com/darthrater78/certwatch/releases/tag/v2026.11.16)** · [Changelog](CHANGELOG.md)
+
+A Windows app for ZTNA demos. For every browser that's running, it shows, live, whether the site in
+the active tab is **steered into the ZTNA tunnel** and whether its certificate was **replaced for
+inspection**, with the path drawn out (browser → tunnel or direct → inspection → site). It calls
+out changes as Windows notifications, flags mTLS sites, and keeps an encrypted per-site history.
 
 ## Run (on Windows)
 
-Just run `CertWatch.exe` (only one copy runs; starting it again brings the window forward). One window, with a tab for every supported browser that's running
-(Edge, Chrome, Brave, Island, Vivaldi, Opera, Firefox). Tabs appear as browsers start and stay after
-they close. Each tab follows its own browser, even in the background.
+Run `CertWatch.exe`. Only one copy runs; starting it again brings the window forward. There's a tab
+for every supported browser that's running (Edge, Chrome, Brave, Island, Vivaldi, Opera, Firefox).
+Tabs appear as browsers start and stay after they close, and each follows its own browser, even in
+the background. Each tab header shows that browser's current site and verdict.
 
-Optional:
+In a tab:
+
+- **The card** shows the live verdict for the active site: the path diagram, issuer, root, validity,
+  protocol, egress adapter, route, the IP CertWatch connected to, and the SHA-256 fingerprint.
+  **Re-check**, **Copy SHA-256** and **Export root…** (the root as `.cer`/`.pem`, or the full chain)
+  are on it.
+- **Sites** lists every site seen in that browser once, with its current label, issuer, egress, and
+  whether it was **inspected earlier** even if it isn't now. Filter it by name.
+- **History** shows the selected site's first visit and every change. **Click a site or a history
+  entry** to show that saved result on the card; **Back to live** returns.
+- **Clear site** clears one site for that browser. **Clear everything…** clears all history in
+  every browser and the log.
+
+In the header: **GitHub** and **Release notes** links, **Log**, and **Theme** (System, Light, Dark;
+System follows Windows). The **Log** window has **Debug detail** (address-bar reads, routes, issuers,
+DevTools traffic) and **Write log to file** (off by default), plus Open log folder, Copy all and
+Clear log.
+
+Closing the window keeps CertWatch in the tray (the icon takes the latest verdict's colour); exit
+from the tray menu, which also has **Send test notification**.
+
+Optional command-line switches:
 
 ```
 CertWatch.exe --browser island                  # always show this tab, even before Island starts
@@ -18,17 +45,15 @@ CertWatch.exe --process SomeBrowser.exe         # add a tab for a browser not in
 CertWatch.exe --interval 10                     # re-check each current site every 10 s (default 15)
 ```
 
-Closing the window keeps CertWatch in the tray; exit from the tray menu. Pop-ups name the browser
-they're about. History is kept, encrypted, in `%LOCALAPPDATA%\CertWatch\history.db`.
-
 ## Launch for demo (optional exact mode)
 
-On a Chrome, Edge or Brave tab, **Launch for demo** opens that browser with a separate CertWatch
-profile (`%LOCALAPPDATA%\CertWatch\profiles\<browser>`) and a private DevTools pipe. While it runs,
-CertWatch reads the exact certificate the browser received and checks **every open tab** in that
-window. A separate profile is required because Chrome 136+ refuses remote debugging on the normal
-profile. Your normal browser windows keep being tracked the original way. Closing the demo browser
-returns the tab to normal mode.
+On a Chrome, Edge or Brave tab, **Launch for demo** opens a separate window of that browser with
+its own CertWatch profile (`%LOCALAPPDATA%\CertWatch\profiles\<browser>`), connected to CertWatch
+over a private DevTools pipe, and adds a **"<browser> · demo"** tab for it. That tab reads the exact
+certificate the browser received and checks **every open tab** in the demo window. A separate profile
+is required because Chrome 136+ refuses remote debugging on the normal profile. Your normal windows
+keep being tracked on the normal tab. Closing the demo window ends it; the demo tab stays with its
+history.
 
 ## How it decides
 
@@ -39,8 +64,9 @@ Two independent measurements, combined into one label per site:
   **not inspected**. If it chains to a private root this machine trusts, a proxy replaced it:
   **inspected** (vendor named when recognised).
 - **Steering (egress):** Windows is asked which route and interface reach the site's IP. A /32 host
-  route with no gateway, a tunnel interface, or a known ZTNA/VPN adapter means **tunnelled to ZTNA**;
-  otherwise **direct**. The adapter's friendly name is shown.
+  route with no gateway, a specific route through a gateway on an adapter that has no default
+  gateway (how Island Private Access does it), a tunnel interface, or a known ZTNA/VPN adapter means
+  **tunnelled to ZTNA**; otherwise **direct**. The adapter's friendly name is shown.
 
 Labels: **Steered to ZTNA · inspected**, **Steered to ZTNA · not inspected**, **Inspected on this
 device** (certificate replaced, traffic not tunnelled), **Direct · not inspected**. Sites inspected
@@ -81,7 +107,10 @@ How CertWatch is built with regard to security, in statements you can check agai
     under the current user's account, so only that account on that PC can unwrap it. History that
     can't be decrypted (for example, copied from another account) is set aside and a fresh database
     started.
-  - `window.json`: window size and position, plain (not sensitive).
+  - `window.json`, `settings.json`: window position, theme and log options, plain (not sensitive).
+  - `logs\certwatch-<date>.log`: written **only** when you turn on **Write log to file**. Plain text,
+    and it names the sites you visit, so it's off by default; **Clear log** and **Clear everything**
+    delete these files. Without it, the log lives only in memory (last 5,000 entries).
   - `profiles\<browser>`: the demo browser's own profile. It holds whatever you sign into in the
     demo window, protected by that browser's own storage protections.
 - **Network exposure.** CertWatch listens on nothing. Outbound, it makes one TLS handshake per site
@@ -98,6 +127,8 @@ How CertWatch is built with regard to security, in statements you can check agai
 
 ### Changes
 
+- 2026-11-16: Added the log. It's in memory by default; writing it to disk is opt-in, and "Clear
+  everything" deletes it along with all history.
 - 2026-11-16: History is encrypted at rest (AES-256-GCM, key protected by DPAPI). Plaintext history
   from earlier builds is migrated and the old pages are wiped.
 - 2026-11-16: Demo mode uses a private DevTools pipe instead of a local debugging port, which any
@@ -112,12 +143,28 @@ How CertWatch is built with regard to security, in statements you can check agai
 ## Build (Linux or Windows)
 
 ```
-dotnet build                     # whole solution (the WPF app compiles on Linux via EnableWindowsTargeting)
-dotnet test                      # core tests run anywhere
-dotnet publish src/CertWatch.App -c Release -r win-x64 --self-contained true \
-  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o artifacts/win-x64
+scripts/build.sh test       # build the solution and run the tests
+scripts/build.sh publish    # self-contained single-file win-x64 build → artifacts/CertWatch-v<version>-win-x64.zip
+scripts/build.sh            # both
 ```
 
-- `src/CertWatch.Core`: cross-platform. TLS check, verdict, history (SQLite), site monitor.
-- `src/CertWatch.App`: Windows-only WPF app. UI Automation tracking, window, tray, notifications.
-- `tests/CertWatch.Core.Tests`: xUnit, including a local TLS server for chain and mTLS detection.
+The WPF app compiles on Linux (via `EnableWindowsTargeting`) and must run on Windows. Core tests run
+anywhere.
+
+- `src/CertWatch.Core`: cross-platform. TLS check, verdict, egress, encrypted history, DevTools pipe client.
+- `src/CertWatch.App`: Windows-only WPF app. UI Automation tracking, window, themes, tray, notifications, log.
+- `tests/CertWatch.Core.Tests`: xUnit, including a local TLS server (chain and mTLS) and a fake browser over pipes.
+- `tools/make_icon.py`, `tools/gen_theme.py`: regenerate the icon and the theme files from `DESIGN.md`.
+
+### CI and releases
+
+- **CI** (`.github/workflows/ci.yml`) runs `scripts/build.sh` on every push and pull request, checks
+  for vulnerable packages, and uploads the Windows zip as an artifact (kept 14 days). Docs-only
+  changes skip the build.
+- **Release** (`.github/workflows/release.yml`) runs when a `v*` tag is pushed. It checks that the tag
+  is on `main` (pre-release tags such as `-dev.1` excepted), that CI passed for that commit, and that
+  the tag matches `<Version>` in `CertWatch.App.csproj`. It then builds the zip and publishes the
+  GitHub release with the matching `CHANGELOG.md` section as notes. Pre-release tags publish as
+  pre-releases.
+- **Lint workflows** (`.github/workflows/lint-workflows.yml`) runs actionlint on workflow changes.
+- Dependabot keeps the NuGet packages and the action pins current.

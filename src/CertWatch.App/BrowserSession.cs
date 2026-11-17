@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Windows.Threading;
+using CertWatch.App.Logging;
 using CertWatch.App.Presentation;
 using CertWatch.App.Tracking;
 using CertWatch.Core.Browsers;
@@ -12,7 +13,11 @@ using CertWatch.Core.Trust;
 
 namespace CertWatch.App;
 
-/// <summary>Everything one browser tab needs: address-bar follower, site monitor and its view model.</summary>
+/// <summary>
+/// Everything one browser tab needs: address-bar follower, site monitor and view model. A demo tab
+/// (opened by Launch for demo) follows only the demo browser's window, reads exact certificates over
+/// its DevTools pipe, and checks every open tab.
+/// </summary>
 internal sealed class BrowserSession : IDisposable
 {
     private readonly HistoryStore _history;
@@ -20,55 +25,71 @@ internal sealed class BrowserSession : IDisposable
     private readonly SiteMonitor _monitor;
     private readonly BrowserFollower _follower;
     private readonly BrowserCertProbe _probe;
-    private readonly TimeSpan _recheckInterval;
-    private OpenTabsScanner? _scanner;
-    private DemoBrowser? _demo;
+    private readonly OpenTabsScanner? _scanner;
+    private readonly DemoBrowser? _demo;
 
     public BrowserSession(BrowserDefinition browser, ICertProbe probe, InspectionClassifier classifier,
-        HistoryStore history, TimeSpan recheckInterval, Dispatcher dispatcher, IRouteLookup? routes)
+        HistoryStore history, TimeSpan recheckInterval, Dispatcher dispatcher, IRouteLookup? routes, DemoBrowser? demo = null)
     {
         Browser = browser;
         _history = history;
         _dispatcher = dispatcher;
+        _demo = demo;
 
-        View = new BrowserTabViewModel(browser);
+        View = new BrowserTabViewModel(browser, demo is not null);
         View.LoadSites(history.GetSiteSummaries(browser.Id));
-        View.SiteSelected += row => View.LoadSiteHistory(row is null
-            ? []
-            : _history.GetSiteHistory(row.Endpoint.Host, row.Endpoint.Port, browser.Id));
-
-        _recheckInterval = recheckInterval;
-        _probe = new BrowserCertProbe(probe);
-        _monitor = new SiteMonitor(_probe, classifier, history, browser.Id, recheckInterval, routes);
-        _monitor.SiteChanged += site => _dispatcher.BeginInvoke(() =>
-        {
-            if (site is { } s) View.ShowChecking(s);
-            else View.ShowNoSite();
-        });
-        _monitor.Checked += check => _dispatcher.BeginInvoke(() => OnChecked(check));
-        View.RecheckRequested += _monitor.RecheckNow;
+        View.SiteSelected += row => View.LoadSiteHistory(row is null ? [] : _history.GetSiteHistory(row.Endpoint.Host, row.Endpoint.Port, browser.Id));
         View.ClearSiteRequested += ClearSite;
-        View.ClearAllRequested += () => ClearAllRequested?.Invoke();
-        View.LaunchDemoRequested += () => _ = LaunchDemoAsync();
+        View.ClearEverythingRequested += () => ClearEverythingRequested?.Invoke();
+        View.LaunchDemoRequested += () => LaunchDemoRequested?.Invoke(this);
 
-        _follower = new BrowserFollower(browser, _monitor);
-        _follower.AddressRead += text => _dispatcher.BeginInvoke(() =>
-            View.AddressText = text ?? $"{browser.DisplayName} isn't running or has no window");
+        _probe = new BrowserCertProbe(probe) { Cdp = demo?.Cdp };
+        _monitor = new SiteMonitor(_probe, classifier, history, browser.Id, recheckInterval, routes);
+        _monitor.SiteChanged += site => _dispatcher.BeginInvoke(() => OnSiteChanged(site));
+        _monitor.Checked += check => _dispatcher.BeginInvoke(() => OnChecked(check, background: false));
+        View.RecheckRequested += _monitor.RecheckNow;
+
+        Func<int, bool> accept = demo is null ? pid => !DemoRegistry.IsDemo(pid) : pid => pid == demo.Process.Id;
+        _follower = new BrowserFollower(browser, _monitor, accept);
+        _follower.AddressRead += text => LogService.Debug(browser.Id, () => $"Address bar: {text ?? "(no window)"}");
+
+        if (demo is not null)
+        {
+            _scanner = new OpenTabsScanner(demo.Cdp, _monitor, recheckInterval);
+            _scanner.TabsListed += tabs => _dispatcher.BeginInvoke(() => View.SetOpenTabs(tabs));
+            _scanner.TabChecked += check => _dispatcher.BeginInvoke(() => OnChecked(check, background: true));
+            _scanner.BrowserGone += () => _dispatcher.BeginInvoke(EndDemo);
+            demo.Process.EnableRaisingEvents = true;
+            demo.Process.Exited += (_, _) => _dispatcher.BeginInvoke(EndDemo);
+        }
+        LogService.Info(browser.Id, demo is null ? $"Following {browser.DisplayName}" : $"Following the {browser.DisplayName} window (pid {demo.Process.Id}) over its DevTools pipe");
     }
 
     public BrowserDefinition Browser { get; }
     public BrowserTabViewModel View { get; }
+    public bool IsDemo => _demo is not null;
 
-    /// <summary>Raised on the UI thread after every check: the current site, and in exact mode every open tab.</summary>
+    /// <summary>Raised on the UI thread after every check (the current site, and in a demo tab every open tab).</summary>
     public event Action<BrowserSession, SiteCheck>? Checked;
-    /// <summary>The user asked to clear all history (handled for every browser by the window).</summary>
-    public event Action? ClearAllRequested;
+    public event Action? ClearEverythingRequested;
+    public event Action<BrowserSession>? LaunchDemoRequested;
 
     public void RecheckNow() => _monitor.RecheckNow();
 
-    private void OnChecked(SiteCheck check)
+    private void OnSiteChanged(SiteEndpoint? site)
     {
-        View.ShowCheck(check);
+        LogService.Info(Browser.Id, site is { } s ? $"Now on {s}" : "No HTTPS page in focus");
+        if (site is { } x) View.ShowChecking(x);
+        else View.ShowNoSite();
+    }
+
+    private void OnChecked(SiteCheck check, bool background)
+    {
+        if (background) View.UpdateRow(check);
+        else View.ShowCheck(check);
+        var c = check.Classification;
+        LogService.Info(Browser.Id, $"{check.Probe.Endpoint}: {c.Verdict}{(c.Vendor is null ? "" : $" ({c.Vendor})")}, egress {check.Egress?.InterfaceLabel ?? "unknown"} {check.Egress?.Kind}, change {check.Observation.Change}{(background ? " [background tab]" : "")}");
+        LogService.Debug(Browser.Id, () => $"{check.Probe.Endpoint}: issuer {c.IssuerName}, root {c.RootName}, source {check.Probe.Source}, ip {check.Probe.RemoteAddress}, route {check.Egress?.RouteLabel}, reason: {check.Egress?.Reason}");
         Checked?.Invoke(this, check);
     }
 
@@ -81,81 +102,27 @@ internal sealed class BrowserSession : IDisposable
         _history.DeleteSite(row.Endpoint.Host, row.Endpoint.Port, Browser.Id);
         View.RemoveSite(row);
         View.StatusMessage = $"Cleared {row.Host} at {DateTime.Now:T}. It reappears when it's checked again.";
+        LogService.Info(Browser.Id, $"Cleared history for {row.Host}");
     }
 
-    /// <summary>After all history was deleted: empty the list. Sites reappear as they're checked again.</summary>
+    /// <summary>After "Clear everything": empty the list. Sites reappear as they're checked again.</summary>
     public void OnHistoryCleared()
     {
         View.ClearSites();
-        View.StatusMessage = $"History cleared at {DateTime.Now:T}. Sites reappear here as they're checked again.";
-    }
-
-    private async Task LaunchDemoAsync()
-    {
-        if (_demo is not null) return;
-
-        var name = Browser.DisplayName;
-        var answer = System.Windows.MessageBox.Show(
-            $"Launch for demo opens a separate {name} window for your demo.\n\n" +
-            $"What happens:\n" +
-            $"• {name} starts with its own CertWatch profile, so it won't have your usual bookmarks, sign-ins or extensions. Sign in there if the demo needs it; the profile is kept for next time.\n" +
-            $"• CertWatch connects to that window over a private pipe that only CertWatch holds (no network port), which lets it see every open tab and the exact certificate {name} received for each site.\n" +
-            $"• CertWatch then checks all of that window's tabs, not just the one in front.\n\n" +
-            $"Your normal {name} windows keep working and are still tracked the usual way. Close the demo window to go back to normal.\n\n" +
-            $"Why a separate profile: {name} doesn't allow remote debugging on your normal profile.\n\n" +
-            "Continue?",
-            $"CertWatch · Launch {name} for demo",
-            System.Windows.MessageBoxButton.OKCancel, System.Windows.MessageBoxImage.Information);
-        if (answer != System.Windows.MessageBoxResult.OK) return;
-
-        View.DemoStarting = true;
-        View.ModeText = $"Starting {Browser.DisplayName} for the demo…";
-        try
-        {
-            var demo = await DemoBrowserLauncher.LaunchAsync(Browser);
-            _demo = demo;
-            _probe.Cdp = demo.Cdp;
-
-            var scanner = new OpenTabsScanner(demo.Cdp, _monitor, _recheckInterval);
-            scanner.TabsListed += tabs => _dispatcher.BeginInvoke(() => View.SetOpenTabs(tabs));
-            scanner.TabChecked += check => _dispatcher.BeginInvoke(() =>
-            {
-                View.UpdateRow(check);
-                Checked?.Invoke(this, check);
-            });
-            scanner.BrowserGone += () => _dispatcher.BeginInvoke(EndDemo);
-            _scanner = scanner;
-
-            demo.Process.EnableRaisingEvents = true;
-            demo.Process.Exited += (_, _) => _dispatcher.BeginInvoke(EndDemo);
-
-            View.DemoActive = true;
-            View.ModeText = $"Exact mode: certificates as {Browser.DisplayName} received them · every open tab checked (demo profile, private DevTools pipe)";
-            _monitor.RecheckNow();
-        }
-        catch (Exception ex)
-        {
-            View.ModeText = "Mode: CertWatch's own connection on this browser's path";
-            System.Windows.MessageBox.Show($"Couldn't start {Browser.DisplayName} for the demo.\n\n{ex.Message}",
-                "CertWatch", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
-        }
-        finally
-        {
-            View.DemoStarting = false;
-        }
+        View.StatusMessage = $"Everything cleared at {DateTime.Now:T}. Sites reappear here as they're checked again.";
     }
 
     private void EndDemo()
     {
-        if (_demo is null) return;
+        if (_demo is null || View.DemoClosed) return;
         _probe.Cdp = null;
-        _ = _demo.Cdp.DisposeAsync().AsTask();
         if (_scanner is { } s) _ = s.DisposeAsync().AsTask();
-        _scanner = null;
-        _demo = null;
-        View.DemoActive = false;
+        _ = _demo.Cdp.DisposeAsync().AsTask();
+        DemoRegistry.Remove(_demo.Process.Id);
+        View.DemoClosed = true;
         View.SetOpenTabs([]);
-        View.ModeText = "Mode: CertWatch's own connection on this browser's path (demo browser closed)";
+        View.ShowNoSite();
+        LogService.Info(Browser.Id, "Demo window closed");
     }
 
     public static bool IsRunning(BrowserDefinition browser)
@@ -172,7 +139,7 @@ internal sealed class BrowserSession : IDisposable
 
     public void Dispose()
     {
-        if (_scanner is { } s) _ = s.DisposeAsync().AsTask();
+        EndDemo();
         _follower.Dispose();
         _ = _monitor.DisposeAsync().AsTask();
     }

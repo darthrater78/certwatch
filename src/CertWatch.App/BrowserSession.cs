@@ -115,7 +115,7 @@ internal sealed class BrowserSession : IDisposable
 
     private void OnChecked(SiteCheck check)
     {
-        // A different path only matters for an enterprise browser (Island) whose check came back inspected:
+        // A different path only matters for an enterprise browser whose check came back inspected:
         // the steering rule for apps outside it can catch CertWatch while the browser goes out on its own.
         // In any other browser, CertWatch's path is the browser's and its result stands.
         var inspected = Browser.Enterprise && check.Classification.Verdict == Verdict.Inspected;

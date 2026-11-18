@@ -12,12 +12,12 @@ All notable changes to CertWatch. Versions are the UTC date of the release.
   all sites** for the rest. **Follow whichever browser is active** switches to the tab of
   the browser you click into, and **Keep on top** keeps the window above others. The choice is saved.
   Pop-ups are off while docked (still logged), since the verdict is already beside the browser.
-- **Own-path detection**, for enterprise browsers (Island) with inspected results only: when CertWatch's check went through the ZTNA tunnel but the browser isn't
-  connected to that address (an enterprise browser's own gateway, such as Island Secure Gateway),
+- **Own-path detection**, for enterprise browsers with inspected results only: when CertWatch's check went through the ZTNA tunnel but the browser isn't
+  connected to that address (an enterprise browser's own gateway),
   the card reads **Browser uses its own path** instead of presenting CertWatch's own result as the
   browser's, and the site's row shows **Own path**. It's read from Windows' TCP connection table;
   nothing is asked of the browser.
-- **Enterprise browsers' own path** (Island): when CertWatch's own check comes back inspected, it also checks the addresses the browser is connected to directly and shows the browser's
+- **Enterprise browsers' own path**: when CertWatch's own check comes back inspected, it also checks the addresses the browser is connected to directly and shows the browser's
   own result (for example **Direct · not inspected**) with CertWatch's steered result as a note. Tray
   colour and pop-ups follow the browser's result.
 - **Compare with the browser's certificate viewer**, offered on inspected enterprise-browser cards and when

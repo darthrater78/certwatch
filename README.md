@@ -202,12 +202,12 @@ its own built-in proxy) may see something else.
 
 ### When the browser takes its own path
 
-An enterprise browser with its own gateway (Island's Secure Gateway, for example) can send a site
+An enterprise browser with its own built-in gateway can send a site
 through its own path while other apps on the PC, CertWatch included, go through the device's ZTNA
 client. CertWatch's connection can then be inspected while the browser's isn't, or the other way
 round.
 
-This only applies to **enterprise browsers (Island)**, and only when CertWatch's own connection was
+This only applies to **enterprise browsers**, and only when CertWatch's own connection was
 **inspected**: then CertWatch may have been caught by the steering rule for apps outside the
 browser, and its result can misstate the browser's. In any other browser, CertWatch takes the same
 path as the browser and its result stands; a result that isn't inspected is shown as it is.
@@ -222,7 +222,7 @@ the site's row shows **Own path**. No inspected or steered pop-up is raised for 
 judge direct paths this way (a site's public addresses vary between lookups) or HTTP/3, which runs
 over UDP and isn't in the TCP table; those keep the normal verdict.
 
-**Enterprise browsers (Island) going out directly.** An enterprise browser can send a site straight
+**Enterprise browsers going out directly.** An enterprise browser can send a site straight
 out while CertWatch's own connection is caught by the device agent's web gateway steering, and both
 can still hold a connection to the site's tunnel address, so the check above can't tell them apart.
 For an enterprise browser, whenever CertWatch's own check was inspected, CertWatch also
@@ -240,7 +240,7 @@ Turn it on, then open the browser's certificate viewer for the site (padlock →
 CertWatch reads the viewer's issuer and SHA-256 fingerprint through UI Automation, the same
 read-only way it reads the address bar, and the card says whether the browser sees the same
 certificate as CertWatch's connection, or which one it got instead. It works with Chromium-family
-viewers (Edge, Chrome, Island, Brave and others); Firefox shows certificates as a page, which isn't
+viewers (Edge, Chrome, Brave and other Chromium-based browsers); Firefox shows certificates as a page, which isn't
 read. If the viewer shows a different certificate from the one on the card, the headline becomes
 **Browser sees a different certificate** and the row shows **Different cert**. The setting is
 saved, and the same button (or **⋯** when docked) turns it off.

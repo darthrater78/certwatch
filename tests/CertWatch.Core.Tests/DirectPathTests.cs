@@ -17,9 +17,9 @@ public class DirectPathTests
         a.ToString().StartsWith("100.64.", StringComparison.Ordinal) ? EgressKind.Tunnel : EgressKind.Direct;
 
     [Fact]
-    public void Island_example_tries_direct_addresses_busiest_first_and_skips_the_tunnel()
+    public void Enterprise_browser_example_tries_direct_addresses_busiest_first_and_skips_the_tunnel()
     {
-        // From the demo machine: Island on claude.ai through Secure Gateway, plus its own services.
+        // From a test machine: an enterprise browser on a site through its own gateway, plus its own services.
         var conns = new[]
         {
             Conn("100.64.0.78"), Conn("100.64.0.19"),

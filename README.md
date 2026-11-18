@@ -98,7 +98,7 @@ host checked, never the full address), routes and issuers.
 
 Run `CertWatch.exe`. Only one copy runs; starting it again brings the window forward. On first run
 it monitors nothing and asks which browsers to watch: tick as many as you like (Edge, Chrome, Brave,
-Island, Vivaldi, Opera, Firefox) and press **Monitor**. Change it any time with **Browsers…** in the
+Vivaldi, Opera, Firefox and others) and press **Monitor**. Change it any time with **Browsers…** in the
 header. Your choice is saved. Each chosen browser gets a tab straight away, running or not (a closed
 browser's tab says **Not running** and still shows its history), and each follows its own browser,
 even in the background. Dropping a browser in
@@ -164,7 +164,7 @@ is over it.
 Optional command-line switches:
 
 ```
-CertWatch.exe --browser island                  # monitor Island this run (not saved), tab shown before it starts
+CertWatch.exe --browser brave                   # monitor Brave this run (not saved), tab shown before it starts
 CertWatch.exe --process SomeBrowser.exe         # add a tab for a browser not in the built-in list
 CertWatch.exe --interval 10                     # re-check each current site every 10 s (default 15)
 ```
@@ -179,7 +179,7 @@ Two independent measurements, combined into one label per site:
   **inspected** (vendor named when recognised).
 - **Steering (egress):** Windows is asked which route and interface reach the site's IP. A /32 host
   route with no gateway, a specific route through a gateway on an adapter that has no default
-  gateway (how Island Private Access does it), a tunnel interface, or a known ZTNA/VPN adapter means
+  gateway (how some ZTNA clients do it), a tunnel interface, or a known ZTNA/VPN adapter means
   **tunnelled to ZTNA**; otherwise **direct**. The adapter's friendly name is shown.
 
 Labels: **Steered to ZTNA · inspected**, **Steered to ZTNA · not inspected**, **Inspected on this

@@ -58,11 +58,11 @@ First release.
 
 ### Added
 
-- One window with a tab per running browser (Edge, Chrome, Brave, Island, Vivaldi, Opera, Firefox),
+- One window with a tab per running browser (Edge, Chrome, Brave, Vivaldi, Opera, Firefox and others),
   each following that browser's active tab through Windows UI Automation, without an extension.
 - Inspection verdict from the certificate chain: public root (Mozilla bundle, matched by key) or
   Certificate Transparency proof means the site's own certificate; a private root this machine
-  trusts means a proxy replaced it, with the vendor named when recognised (Island, Zscaler,
+  trusts means a proxy replaced it, with the vendor named when recognised (Zscaler,
   Netskope, Palo Alto and others).
 - Steering verdict from the Windows routing table: ZTNA tunnel or direct, by the egress adapter's
   friendly name, with the route shown. Combined labels: steered and inspected, steered but not

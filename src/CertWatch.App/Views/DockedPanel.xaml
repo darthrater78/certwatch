@@ -117,6 +117,9 @@
                     <Button Style="{StaticResource PrimaryButtonStyle}" Height="28" Padding="10,0" Content="_Back to live" Command="{Binding BackToLiveCommand}" Margin="0,0,6,0"
                             Visibility="{Binding ShowingSaved, Converter={StaticResource BoolToVis}}" ToolTip="{Binding CardNote}"/>
                     <Button Style="{StaticResource SmallButton}" Content="_Copy SHA-256" Command="{Binding CopyFingerprintCommand}"/>
+                <Button Style="{StaticResource SmallButton}" Content="{Binding ViewerButtonText}" Command="{Binding ToggleViewerCommand}" Margin="0,6,0,0"
+                        Visibility="{Binding OwnPathDetected, Converter={StaticResource BoolToVis}}" HorizontalAlignment="Left"
+                        ToolTip="Read the certificate viewer you open in this browser (read-only) and compare it with CertWatch's own connection"/>
                 </WrapPanel>
             </StackPanel>
         </Border>

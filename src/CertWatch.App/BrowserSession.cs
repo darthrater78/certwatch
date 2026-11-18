@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Windows.Threading;
 using CertWatch.App.Logging;
 using CertWatch.App.Presentation;
@@ -21,12 +22,14 @@ internal sealed class BrowserSession : IDisposable
     private readonly Dispatcher _dispatcher;
     private readonly SiteMonitor _monitor;
     private readonly BrowserFollower _follower;
+    private readonly IRouteLookup? _routes;
 
     public BrowserSession(BrowserDefinition browser, ICertProbe probe, InspectionClassifier classifier,
         HistoryStore history, TimeSpan recheckInterval, Dispatcher dispatcher, IRouteLookup? routes)
     {
         Browser = browser;
         _history = history;
+        _routes = routes;
         _dispatcher = dispatcher;
 
         View = new BrowserTabViewModel(browser);
@@ -49,7 +52,7 @@ internal sealed class BrowserSession : IDisposable
     public BrowserDefinition Browser { get; }
     public BrowserTabViewModel View { get; }
     /// <summary>Raised on the UI thread after every check of the current site.</summary>
-    public event Action<BrowserSession, SiteCheck>? Checked;
+    public event Action<BrowserSession, SiteCheck, BrowserPathResult>? Checked;
 
     public void RecheckNow() => _monitor.RecheckNow();
 
@@ -102,11 +105,59 @@ internal sealed class BrowserSession : IDisposable
 
     private void OnChecked(SiteCheck check)
     {
-        View.ShowCheck(check);
+        var path = ComparePath(check);
+        View.ShowCheck(check, path);
         var c = check.Classification;
         LogService.Info(Browser.Id, $"{check.Probe.Endpoint}: {c.Verdict}{(c.Vendor is null ? "" : $" ({c.Vendor})")}, egress {check.Egress?.InterfaceLabel ?? "unknown"} {check.Egress?.Kind}, change {check.Observation.Change}{(c.Verdict == Verdict.Error ? $": {c.Reason}" : "")}");
         LogService.Debug(Browser.Id, () => $"{check.Probe.Endpoint}: issuer {c.IssuerName}, root {c.RootName}, ip {check.Probe.RemoteAddress}, route {check.Egress?.RouteLabel}, reason: {check.Egress?.Reason}");
-        Checked?.Invoke(this, check);
+        if (path.Match == BrowserPathMatch.Different)
+            LogService.Info(Browser.Id, $"{check.Probe.Endpoint}: {Browser.DisplayName} isn't connected to {check.Probe.RemoteAddress} (CertWatch's tunnel address); it uses its own path{(path.BrowserInterfaces.Count == 0 ? "" : $" via {string.Join(", ", path.BrowserInterfaces)}")}");
+        Checked?.Invoke(this, check, path);
+    }
+
+    /// <summary>
+    /// Whether the browser is connected to the address CertWatch checked (read from Windows' TCP
+    /// connection table; nothing is asked of the browser). Different only for a tunnel path, where
+    /// each site has its own address.
+    /// </summary>
+    private BrowserPathResult ComparePath(SiteCheck check)
+    {
+        try
+        {
+            var connections = TcpConnections.EstablishedFor(ProcessIds());
+            var port = check.Probe.Endpoint.Port;
+            var match = BrowserPath.Compare(check.Probe.RemoteAddress, port, check.Egress?.Kind, connections);
+            if (match != BrowserPathMatch.Different) return new BrowserPathResult(match, []);
+            // Name the adapters the browser's own connections to that port leave by (a few lookups at most).
+            var interfaces = connections.Where(c => c.RemotePort == port).Select(c => c.Remote).Distinct().Take(6)
+                .Select(ip => _routes?.Lookup(ip)?.InterfaceName).OfType<string>().Distinct().ToList();
+            return new BrowserPathResult(match, interfaces);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or ExternalException)
+        {
+            return BrowserPathResult.Unknown;
+        }
+    }
+
+    private HashSet<int> ProcessIds()
+    {
+        var ids = new HashSet<int>();
+        foreach (var name in Browser.ProcessNames)
+        {
+            foreach (var p in Process.GetProcessesByName(name))
+            {
+                using (p) ids.Add(p.Id);
+            }
+        }
+        return ids;
+    }
+
+    /// <summary>What the browser's own certificate viewer showed (read from the window the user opened).</summary>
+    public void ApplyViewerReading(CertViewerReading reading)
+    {
+        View.SetViewerReading(reading);
+        var live = View.Card.Fingerprint;
+        LogService.Info(Browser.Id, $"Certificate viewer for {reading.Host}: issued by {reading.IssuerLabel ?? "unknown"}, {(View.Card.Site.Length > 0 && reading.Matches(live) ? "same certificate as CertWatch's connection" : "compared on the card")}");
     }
 
     private void ClearSite(SiteRow row)

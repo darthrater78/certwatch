@@ -24,6 +24,8 @@ internal sealed class AppSettings
     /// <summary>Switch to the tab of whichever monitored browser has focus.</summary>
     public bool FollowActiveBrowser { get; set; } = true;
     public bool KeepOnTop { get; set; }
+    /// <summary>Read the certificate viewer the user opens in a monitored browser, and compare it with CertWatch's own connection. Off by default.</summary>
+    public bool ReadCertificateViewer { get; set; }
 
     private static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CertWatch", "settings.json");

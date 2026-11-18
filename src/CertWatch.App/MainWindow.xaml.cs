@@ -139,6 +139,7 @@ public partial class MainWindow : Window
     private void RemoveSession(BrowserSession session)
     {
         session.Checked -= OnChecked;
+        session.View.ViewerToggleRequested -= SetViewerReading;
         // Stopping the follower waits for its poll to finish; keep that wait off the UI thread.
         _ = Task.Run(session.Dispose);
         _sessions.Remove(session);
@@ -167,6 +168,8 @@ public partial class MainWindow : Window
         if (existing is not null) return existing;
         var session = new BrowserSession(browser, _probe, _classifier, _history, _options.RecheckInterval, Dispatcher, _routes);
         session.Checked += OnChecked;
+        session.View.ViewerReadingEnabled = _settings.ReadCertificateViewer;
+        session.View.ViewerToggleRequested += SetViewerReading;
         _sessions.Add(session);
         _shell.Tabs.Add(session.View);
         _shell.SelectedTab ??= session.View;
@@ -247,7 +250,35 @@ public partial class MainWindow : Window
             try { _shell.SelectedTab = session.View; }
             finally { _selectingFromForeground = false; }
         }
+        // The browser's certificate viewer is never the window to dock beside, whatever its window style.
+        if (CertViewerText.HostFromTitle(Native.WindowTitle(window)) is { } viewerHost)
+        {
+            if (_settings.ReadCertificateViewer) TryReadCertViewer(session, window, viewerHost);
+            return;
+        }
         if (_dock is not null && _shell.SelectedTab == session.View && DockController.IsDockable(window)) _dock.Target = window;
+    }
+
+    /// <summary>Offered on the card when a browser has its own path; saved, and applied to every tab.</summary>
+    private void SetViewerReading(bool on)
+    {
+        _settings.ReadCertificateViewer = on;
+        _settings.Save();
+        foreach (var tab in _shell.Tabs) tab.ViewerReadingEnabled = on;
+        LogService.Info("app", on ? "Reading browsers' certificate viewers when opened" : "Stopped reading certificate viewers");
+    }
+
+    /// <summary>
+    /// The browser's certificate viewer (found by its title) came forward: read its fingerprint and
+    /// issuer on a background thread (UI Automation must stay off the UI thread).
+    /// </summary>
+    private void TryReadCertViewer(BrowserSession session, IntPtr window, string host)
+    {
+        Task.Run(() => CertViewerReader.Read(window, host)).ContinueWith(t =>
+        {
+            if (t.IsCompletedSuccessfully && t.Result is { } reading)
+                Dispatcher.BeginInvoke(() => { if (_sessions.Contains(session)) session.ApplyViewerReading(reading); });
+        }, TaskScheduler.Default);
     }
 
     private void OnSelectedTabChanged()
@@ -299,6 +330,7 @@ public partial class MainWindow : Window
         // Pop-ups are off while docked; the duration still applies once CertWatch floats again.
         menu.Items.Add(new MenuItem { Header = "Pop-ups: off while docked", IsEnabled = false });
         menu.Items.Add(Item(_shell.ThemeText, false, () => OnTheme(this, new RoutedEventArgs())));
+        menu.Items.Add(Item("Read the browser's _certificate viewer", _settings.ReadCertificateViewer, () => SetViewerReading(!_settings.ReadCertificateViewer)));
         menu.Items.Add(new Separator());
         menu.Items.Add(Item("_GitHub", false, () => OpenOwnLink(_shell.RepoUrl)));
         menu.Items.Add(Item($"_Release notes ({_shell.VersionText})", false, () => OpenOwnLink(_shell.ReleaseNotesUrl)));
@@ -332,13 +364,19 @@ public partial class MainWindow : Window
 
     // ---- results: tray and notifications ----
 
-    private void OnChecked(BrowserSession session, SiteCheck check)
+    private void OnChecked(BrowserSession session, SiteCheck check, BrowserPathResult path)
     {
         var c = check.Classification;
         var browser = session.Browser.DisplayName;
         var site = check.Probe.Endpoint.ToString();
         var treatment = PathTreatment.Of(c.Verdict, check.Egress?.Kind.ToString());
         var status = Status.Of(treatment, c.Verdict);
+        if (path.Match == BrowserPathMatch.Different)
+        {
+            // CertWatch's result isn't the browser's: no inspected/steered tray colour or pop-up for it.
+            _tray.SetState(StatusKind.Neutral, $"CertWatch · {browser} · {site}: browser uses its own path");
+            return;
+        }
         _tray.SetState(status, $"CertWatch · {browser} · {site}: {VerdictStyle.Short(treatment, c.Verdict)}");
 
         // Docked, the verdict is already on screen beside the browser, so pop-ups stay off (still logged).

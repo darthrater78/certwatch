@@ -80,6 +80,17 @@ public sealed class SiteRow(SiteEndpoint endpoint) : Observable
         LastChange = changeCount == 0 ? $"No changes · first seen {when}" : $"{VerdictStyle.Describe(latest.Change) ?? "Changed"} · {when}";
     }
 
+    /// <summary>
+    /// After a live check: when the browser has its own path, the row stops claiming CertWatch's
+    /// verdict as the browser's. The saved history keeps CertWatch's result as observed.
+    /// </summary>
+    public void SetBrowserPath(BrowserPathMatch match)
+    {
+        if (match != BrowserPathMatch.Different) return;
+        Status = StatusKind.Neutral;
+        Verdict = "Own path";
+    }
+
     /// <summary>A re-check or change for this site just came in.</summary>
     public void Update(Observation o)
     {

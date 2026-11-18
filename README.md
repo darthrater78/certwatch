@@ -44,7 +44,8 @@ address bar. If `portal.contoso.com` pulls data from `api.contoso.net`, only the
 the browser's. Both normally take the same path (same adapter, same proxy), so they match. They can
 differ when a ZTNA product treats traffic per browser rather than per device. An enterprise browser
 with ZTNA built in is the main example: its in-browser path may be inspected or steered in a way a
-separate connection from another app doesn't see.
+separate connection from another app doesn't see. CertWatch now notices this case (see
+[When the browser takes its own path](#when-the-browser-takes-its-own-path)).
 
 **What it never does.** It listens on no network port, installs no certificate, changes no proxy,
 PAC, route or registry setting, injects nothing into any process, hooks no keyboard input, and never
@@ -199,6 +200,31 @@ The check is CertWatch's own connection from this machine, along the same route 
 traffic takes. A browser that routes or inspects its own traffic differently (for example, through
 its own built-in proxy) may see something else.
 
+### When the browser takes its own path
+
+An enterprise browser with its own gateway (Island's Secure Gateway, for example) can send a site
+through its own path while other apps on the PC, CertWatch included, go through the device's ZTNA
+client. CertWatch's connection can then be inspected while the browser's isn't, or the other way
+round.
+
+After each check, CertWatch reads Windows' TCP connection table (what `netstat -ano` shows) to see
+whether the browser's processes are connected to the address CertWatch reached. ZTNA clients give
+each site its own tunnel address, so when CertWatch's check went through the tunnel and the browser
+has connections on that port but none to that address, the browser is on its own path. The card
+then reads **Browser uses its own path** (grey, not violet or blue), says which adapters the
+browser's connections leave by, labels the certificate details as CertWatch's own connection, and
+the site's row shows **Own path**. No inspected or steered pop-up is raised for it. CertWatch doesn't
+judge direct paths this way (a site's public addresses vary between lookups) or HTTP/3, which runs
+over UDP and isn't in the TCP table; those keep the normal verdict.
+
+When it detects its own path, the card offers **Compare with the browser's certificate viewer**.
+Turn it on, then open the browser's certificate viewer for the site (padlock → certificate).
+CertWatch reads the viewer's issuer and SHA-256 fingerprint through UI Automation, the same
+read-only way it reads the address bar, and the card says whether the browser sees the same
+certificate as CertWatch's connection, or which one it got instead. It works with Chromium-family
+viewers (Edge, Chrome, Island, Brave and others); Firefox shows certificates as a page, which isn't
+read. The setting is saved, and the same button (or **⋯** when docked) turns it off.
+
 ## Security architecture
 
 How CertWatch is built with regard to security, in statements you can check against the code.
@@ -232,6 +258,15 @@ How CertWatch is built with regard to security, in statements you can check agai
   its own window (`SetWindowPos` on its own handle); it never moves, resizes, re-parents, owns or
   activates a browser window. The reserved edge is given back when you undock, hide CertWatch to the
   tray, minimise it, exit, or when CertWatch crashes.
+- **Comparing paths reads the connection table and, if you turn it on, the certificate viewer.**
+  To tell whether the browser shares CertWatch's path it reads Windows' TCP connection table
+  (`GetExtendedTcpTable`, no elevation) for the browser's processes: remote address and port only.
+  It never opens, closes or touches a connection. When you turn on **Compare with the browser's
+  certificate viewer** (off by default), CertWatch reads the text of a certificate viewer window you
+  open in a monitored browser, through UI Automation, read-only. From that text it keeps only the
+  host (from the window title, checked as a host name), the SHA-256 fingerprint (64 hex digits) and
+  the issuer's two names, capped in length. It never clicks, focuses or switches tabs in it. These
+  readings stay in memory and aren't saved to history.
 - **Privileges.** Runs as the signed-in user (`asInvoker`), never elevated. It writes only under
   `%LOCALAPPDATA%\CertWatch` (plus an exported root, wherever you choose to save it), and nothing
   to the registry; it reads one registry value, your Windows light/dark setting, on first run. P/Invoke calls load system DLLs from
@@ -268,6 +303,10 @@ How CertWatch is built with regard to security, in statements you can check agai
 
 ### Changes
 
+- 2026-11-18: Own-path detection. CertWatch reads the TCP connection table (read-only) to see
+  whether the browser is connected to the address CertWatch checked, and stops presenting its own
+  result as the browser's when it isn't. Optional, off by default: reading the certificate viewer
+  the user opens, keeping only the host, fingerprint and issuer names.
 - 2026-11-18: Docking. CertWatch can dock beside or above the browser. It reads the browser
   window's position and gets window events out of context (nothing is loaded into the browser),
   and it moves only its own window. Screen-edge docking reserves space through Windows' app bar API,

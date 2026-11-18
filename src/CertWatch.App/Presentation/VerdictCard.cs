@@ -72,7 +72,14 @@ public sealed class VerdictCard : Observable
         Subline = "Connecting the way the browser does";
     }
 
-    public void ShowLive(SiteCheck check, string? pastInspection) => Render(FromCheck(check), live: true, pastInspection);
+    /// <param name="path">Whether the browser takes CertWatch's path; Different turns the headline into "Browser uses its own path".</param>
+    /// <param name="viewer">What the browser's own certificate viewer showed for this site, when the user opened it.</param>
+    /// <param name="viewerHint">A prompt to open the browser's certificate viewer, shown as a note.</param>
+    public void ShowLive(SiteCheck check, string? pastInspection, BrowserPathResult? path = null, CertViewerReading? viewer = null, string? viewerHint = null)
+    {
+        Render(FromCheck(check), live: true, pastInspection, path, viewer);
+        if (viewerHint is not null) Notes.Add(new CardNote(viewerHint, StatusKind.Neutral));
+    }
 
     public void ShowSaved(Observation o, string? pastInspection) => Render(FromObservation(o), live: false, pastInspection);
 
@@ -96,8 +103,9 @@ public sealed class VerdictCard : Observable
     private static string? Protocol(string? protocol, string? cipher) =>
         protocol is null ? null : cipher is null ? protocol : $"{protocol} · {cipher}";
 
-    private void Render(CardData d, bool live, string? pastInspection)
+    private void Render(CardData d, bool live, string? pastInspection, BrowserPathResult? path = null, CertViewerReading? viewer = null)
     {
+        var ownPath = path?.Match == BrowserPathMatch.Different;
         var treatment = PathTreatment.Of(d.Verdict, d.EgressKind);
         Status = Presentation.Status.Of(treatment, d.Verdict);
         Site = d.Site;
@@ -105,21 +113,30 @@ public sealed class VerdictCard : Observable
         Headline = VerdictStyle.Headline(treatment, d.Verdict, d.Vendor, d.MutualTls);
         var change = VerdictStyle.Describe(d.Change);
         Subline = change is null || d.Change == ChangeKind.FirstSeen ? d.Reason : $"{change} · {d.Reason}";
+        if (ownPath)
+        {
+            // CertWatch's result is true of its own connection only; don't present it as the browser's.
+            Subline = $"CertWatch's own connection: {Headline}. {Subline}";
+            Headline = "Browser uses its own path";
+            Status = StatusKind.Neutral;
+        }
         Fingerprint = d.Fingerprint ?? "";
         Chain = d.Chain;
-        BuildPath(d);
+        BuildPath(d, ownPath);
         BuildFacts(d);
-        BuildNotes(d, pastInspection);
+        BuildNotes(d, pastInspection, ownPath ? path : null, viewer);
     }
 
-    private void BuildPath(CardData d)
+    private void BuildPath(CardData d, bool ownConnection = false)
     {
         Path.Clear();
         var inspected = d.Verdict == Verdict.Inspected;
         var egress = Presentation.Status.OfEgress(d.EgressKind);
         var egressThenLine = inspected ? StatusKind.Inspected : egress;
 
-        Path.Add(new PathNode(_browserName, "your browser", StatusKind.Neutral, Icon("IconBrowser"), true, egress));
+        Path.Add(ownConnection
+            ? new PathNode("CertWatch", "own connection, not the browser's", StatusKind.Neutral, Icon("IconBrowser"), true, egress)
+            : new PathNode(_browserName, "your browser", StatusKind.Neutral, Icon("IconBrowser"), true, egress));
         Path.Add(d.EgressKind switch
         {
             nameof(EgressKind.Tunnel) => new PathNode(d.EgressInterface ?? "ZTNA tunnel", $"tunnel · {RoutePrefix(d.EgressRoute)}", StatusKind.Steered, Icon("IconSteered"), true, egressThenLine),
@@ -153,9 +170,20 @@ public sealed class VerdictCard : Observable
         Facts.Add(new Fact("SHA-256", Shorten(d.Fingerprint), Mono: true, Tooltip: d.Fingerprint));
     }
 
-    private void BuildNotes(CardData d, string? pastInspection)
+    private void BuildNotes(CardData d, string? pastInspection, BrowserPathResult? ownPath = null, CertViewerReading? viewer = null)
     {
         Notes.Clear();
+        if (ownPath is not null)
+        {
+            var via = ownPath.BrowserInterfaces.Count == 0 ? "" : $"; its connections leave via {string.Join(", ", ownPath.BrowserInterfaces)}";
+            Notes.Add(new CardNote($"{_browserName} isn't connected to {d.RemoteIp}, the address CertWatch reached through {d.EgressInterface ?? "the tunnel"}{via}. The details below are CertWatch's own connection, not the browser's.", StatusKind.Neutral));
+        }
+        if (viewer is not null)
+        {
+            Notes.Add(viewer.Matches(d.Fingerprint)
+                ? new CardNote($"{_browserName}'s certificate viewer shows the same certificate as CertWatch's connection.", StatusKind.Neutral)
+                : new CardNote($"{_browserName}'s certificate viewer shows a different certificate: issued by {viewer.IssuerLabel ?? "an issuer CertWatch couldn't read"}, SHA-256 {Shorten(viewer.Sha256)}. CertWatch's connection got one issued by {d.Issuer ?? "—"}.", StatusKind.Neutral));
+        }
         if (d.MutualTls)
             Notes.Add(new CardNote("mTLS: the server asks for a client certificate, so it can't be inspected and needs a bypass rule.", StatusKind.Steered));
         if (pastInspection is not null && d.Verdict != Verdict.Inspected)

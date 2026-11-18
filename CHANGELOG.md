@@ -11,6 +11,14 @@ All notable changes to CertWatch. Versions are the UTC date of the release.
   so maximised windows fit around it). **Follow whichever browser is active** switches to the tab of
   the browser you click into, and **Keep on top** keeps the window above others. The choice is saved.
   Pop-ups are off while docked (still logged), since the verdict is already beside the browser.
+- **Own-path detection**: when CertWatch's check went through the ZTNA tunnel but the browser isn't
+  connected to that address (an enterprise browser's own gateway, such as Island Secure Gateway),
+  the card reads **Browser uses its own path** instead of presenting CertWatch's own result as the
+  browser's, and the site's row shows **Own path**. It's read from Windows' TCP connection table;
+  nothing is asked of the browser.
+- **Compare with the browser's certificate viewer**, offered on the card when the browser takes its
+  own path (off by default): open the browser's certificate viewer and CertWatch reads its issuer and
+  fingerprint (read-only) and shows whether the browser got the same certificate.
 
 ## [2026.11.17-2] - 2026-11-17
 

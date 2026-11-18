@@ -2,6 +2,16 @@
 
 All notable changes to CertWatch. Versions are the UTC date of the release.
 
+## [Unreleased]
+
+### Added
+
+- **Dock** in the header: keep CertWatch right or left of the browser (a 380px panel) or above it (a
+  64px strip), docked to the browser window (moves with it) or to the screen edge (reserves space,
+  so maximised windows fit around it). **Follow whichever browser is active** switches to the tab of
+  the browser you click into, and **Keep on top** keeps the window above others. The choice is saved.
+  Pop-ups are off while docked (still logged), since the verdict is already beside the browser.
+
 ## [2026.11.17-2] - 2026-11-17
 
 ### Added

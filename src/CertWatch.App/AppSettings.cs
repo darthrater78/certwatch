@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using CertWatch.Core.Docking;
 
 namespace CertWatch.App;
 
@@ -16,6 +17,13 @@ internal sealed class AppSettings
     public bool LogToFile { get; set; }
     /// <summary>Ids of the browsers to monitor (BrowserCatalog). Null until the user first chooses: nothing is monitored.</summary>
     public List<string>? MonitoredBrowsers { get; set; }
+    /// <summary>Floating window, or docked right/left/above the browser.</summary>
+    public DockPosition Dock { get; set; }
+    /// <summary>Docked to the browser window (moves with it) or to the screen edge (reserves space).</summary>
+    public DockAnchor DockAnchor { get; set; }
+    /// <summary>Switch to the tab of whichever monitored browser has focus.</summary>
+    public bool FollowActiveBrowser { get; set; } = true;
+    public bool KeepOnTop { get; set; }
 
     private static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CertWatch", "settings.json");

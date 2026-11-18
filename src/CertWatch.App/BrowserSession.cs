@@ -53,6 +53,33 @@ internal sealed class BrowserSession : IDisposable
 
     public void RecheckNow() => _monitor.RecheckNow();
 
+    /// <summary>The browser window this session last read (zero when none).</summary>
+    public IntPtr Window => _follower.Window;
+
+    /// <summary>The process name behind a window (e.g. "msedge"), or null when it can't be read.</summary>
+    public static string? ProcessNameOf(IntPtr window)
+    {
+        if (window == IntPtr.Zero) return null;
+        Native.GetWindowThreadProcessId(window, out var pid);
+        if (pid == 0) return null;
+        try
+        {
+            using var process = Process.GetProcessById((int)pid);
+            return process.ProcessName;
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Whether a process name is this browser's (the same test the follower uses).</summary>
+    public bool OwnsProcess(string? processName) =>
+        processName is not null && Browser.ProcessNames.Any(n => string.Equals(n, processName, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Whether a top-level window belongs to this browser.</summary>
+    public bool Owns(IntPtr window) => OwnsProcess(ProcessNameOf(window));
+
     // Background thread. Raised before the monitor hears about the site, and the only place the
     // no-site states are shown, so "not running" and "no HTTPS page" can be told apart.
     private void OnAddressRead(string? text)

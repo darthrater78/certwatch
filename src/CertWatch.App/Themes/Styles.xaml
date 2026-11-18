@@ -229,6 +229,16 @@
             </Setter.Value>
         </Setter>
     </Style>
+    <!-- Menu separators take the theme's line colour (the default is a light-grey etched line) -->
+    <Style TargetType="Separator">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Separator">
+                    <Border Height="1" Margin="6,4" Background="{DynamicResource Line}"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
     <Style TargetType="MenuItem">
         <Setter Property="Foreground" Value="{DynamicResource OnSurface}"/>
         <Setter Property="Template">
@@ -236,12 +246,17 @@
                 <ControlTemplate TargetType="MenuItem">
                     <Border x:Name="Bd" Background="Transparent" CornerRadius="3" Padding="10,5" MinWidth="140">
                         <DockPanel>
+                            <!-- Tick for checked items (dock position, anchor, toggles); empty space otherwise so labels line up -->
+                            <Path x:Name="Check" DockPanel.Dock="Left" Width="12" Height="12" Margin="0,0,8,0" VerticalAlignment="Center"
+                                  Data="M4,12 L10,18 L20,6" Stretch="Uniform" Stroke="{DynamicResource Heading}" StrokeThickness="2.4"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Visibility="Hidden"/>
                             <TextBlock DockPanel.Dock="Right" Text="{TemplateBinding InputGestureText}" Margin="24,0,0,0"
                                        Foreground="{DynamicResource OnSurfaceMuted}"/>
                             <ContentPresenter ContentSource="Header" RecognizesAccessKey="True"/>
                         </DockPanel>
                     </Border>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True"><Setter TargetName="Check" Property="Visibility" Value="Visible"/></Trigger>
                         <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface}"/></Trigger>
                         <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.5"/></Trigger>
                     </ControlTemplate.Triggers>

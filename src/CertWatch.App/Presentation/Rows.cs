@@ -54,8 +54,10 @@ public sealed class SiteRow(SiteEndpoint endpoint) : Observable
     public int ChangeCount { get => _changeCount; private set => Set(ref _changeCount, value); }
 
     private DateTimeOffset _lastSeen;
-    public DateTimeOffset LastSeen { get => _lastSeen; private set { if (Set(ref _lastSeen, value)) OnChanged(nameof(LastSeenText)); } }
+    public DateTimeOffset LastSeen { get => _lastSeen; private set { if (!Set(ref _lastSeen, value)) return; OnChanged(nameof(LastSeenText)); OnChanged(nameof(LastSeenTime)); } }
     public string LastSeenText => _lastSeen.LocalDateTime.ToString("MMM d HH:mm:ss");
+    /// <summary>Time of day only, for the narrow docked list.</summary>
+    public string LastSeenTime => _lastSeen.LocalDateTime.ToString("HH:mm");
 
     /// <summary>When the site was last seen inspected, even if it isn't now.</summary>
     public DateTimeOffset? LastInspected { get; private set; }

@@ -23,6 +23,9 @@ internal sealed class BrowserFollower : IDisposable
         _thread.Start();
     }
 
+    /// <summary>The browser window whose address bar is being read (zero when none).</summary>
+    public IntPtr Window => _reader.Window;
+
     /// <summary>Raw address-bar text (background thread). Subscribers must not log or store it as-is: it can hold paths and query strings.</summary>
     public event Action<string?>? AddressRead;
 

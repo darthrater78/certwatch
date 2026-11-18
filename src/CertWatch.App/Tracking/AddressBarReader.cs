@@ -13,11 +13,15 @@ namespace CertWatch.App.Tracking;
 internal sealed class AddressBarReader(BrowserDefinition browser, Func<int, bool> acceptProcess)
 {
     private readonly HashSet<string> _processNames = new(browser.ProcessNames, StringComparer.OrdinalIgnoreCase);
-    private IntPtr _window;
+    // Written by the polling thread, read by the UI thread for docking.
+    private volatile IntPtr _window;
     private AutomationElement? _addressBar;
     private string? _lastValue;
     private int _reads;
     private const int RefindEvery = 20; // about every 14 s at the default poll rate
+
+    /// <summary>The browser window being followed (zero when none). Read-only use: docking places CertWatch beside it.</summary>
+    public IntPtr Window => _window;
 
     /// <summary>Address-bar text of the followed window; null when the browser isn't running.</summary>
     public string? Read()

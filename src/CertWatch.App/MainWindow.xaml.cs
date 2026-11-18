@@ -1,13 +1,17 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Navigation;
 using System.Windows.Threading;
+using CertWatch.App.Docking;
 using CertWatch.App.Logging;
 using CertWatch.App.Presentation;
 using CertWatch.App.Tracking;
 using CertWatch.App.Views;
 using CertWatch.Core.Browsers;
+using CertWatch.Core.Docking;
 using CertWatch.Core.History;
 using CertWatch.Core.Monitoring;
 using CertWatch.Core.Network;
@@ -40,6 +44,9 @@ public partial class MainWindow : Window
     // Browser|site pairs already announced as steered to ZTNA (not inspected) this session.
     private readonly HashSet<string> _announcedSteered = [];
     private LogWindow? _logWindow;
+    private DockController? _dock;
+    // Set while the foreground browser changes the selected tab, so the dock keeps that exact window.
+    private bool _selectingFromForeground;
     private bool _exiting;
 
     internal MainWindow(StartupOptions options)
@@ -52,6 +59,15 @@ public partial class MainWindow : Window
         WindowPlacement.Apply(this);
         DataContext = _shell;
         _shell.ThemeText = $"Theme: {ThemeManager.Mode}";
+        _shell.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ShellViewModel.SelectedTab)) OnSelectedTabChanged(); };
+        SourceInitialized += (_, _) => InitDocking();
+        // Minimised from the taskbar while docked: don't leave a reserved, empty strip behind.
+        StateChanged += (_, _) =>
+        {
+            if (_dock is null || !_dock.IsDocked) return;
+            if (WindowState == WindowState.Minimized) _dock.Suspend();
+            else _dock.Resume();
+        };
         _options = options;
         _history = HistoryKeyStore.OpenHistory(options.DatabasePath ?? HistoryStore.DefaultPath);
         LogService.Info("app", $"CertWatch {_shell.VersionText} started");
@@ -160,6 +176,160 @@ public partial class MainWindow : Window
 
     private BrowserSession? SessionFor(BrowserTabViewModel? tab) => _sessions.FirstOrDefault(s => s.View == tab);
 
+    // ---- docking (DESIGN.md "Docked layouts") ----
+
+    private void InitDocking()
+    {
+        _dock = new DockController(this, () => DockTargetFor(SessionFor(_shell.SelectedTab)));
+        _dock.Attach();
+        _dock.ForegroundChanged += OnForegroundChanged;
+        _dock.HintChanged += hint => _shell.DockHint = hint ?? "";
+        _dock.KeepOnTop = _settings.KeepOnTop;
+        _settings.Dock = DockLayout.Validate(_settings.Dock);
+        _settings.DockAnchor = DockLayout.Validate(_settings.DockAnchor);
+        if (_settings.Dock != DockPosition.Floating) ApplyDock(_settings.Dock, _settings.DockAnchor);
+    }
+
+    /// <summary>The browser window to dock beside for a session: its main window only, never a dialog or pop-up.</summary>
+    private static IntPtr DockTargetFor(BrowserSession? session) =>
+        session?.Window is { } w && DockController.IsDockable(w) ? w : IntPtr.Zero;
+
+    /// <summary>Switches layout and window chrome, then lets the controller place the window. Saved by the caller.</summary>
+    private void ApplyDock(DockPosition position, DockAnchor anchor)
+    {
+        if (_dock is null) return;
+        var wasFloating = _shell.IsFloating;
+        // Remember the floating window's place so undocking puts it back.
+        if (wasFloating && position != DockPosition.Floating && IsVisible) WindowPlacement.Save(this);
+
+        if (position == DockPosition.Floating)
+        {
+            _dock.Apply(DockPosition.Floating, anchor); // gives back a reserved screen edge first
+            WindowStyle = WindowStyle.SingleBorderWindow;
+            ResizeMode = ResizeMode.CanResize;
+            MinWidth = 720;
+            MinHeight = 480;
+            _shell.Dock = DockPosition.Floating;
+            if (!wasFloating) WindowPlacement.Apply(this);
+        }
+        else
+        {
+            if (WindowState != WindowState.Normal) WindowState = WindowState.Normal;
+            WindowStyle = WindowStyle.None;
+            ResizeMode = ResizeMode.NoResize;
+            MinWidth = 0;
+            MinHeight = 0;
+            _shell.Dock = position;
+            _popups.CloseAll(); // pop-ups are off while docked
+            _dock.Target = DockTargetFor(SessionFor(_shell.SelectedTab));
+            _dock.Apply(position, anchor);
+        }
+        LogService.Info("app", position == DockPosition.Floating ? "Floating window" : $"Docked {position} ({anchor})");
+    }
+
+    private void SetDock(DockPosition position, DockAnchor anchor)
+    {
+        _settings.Dock = position;
+        _settings.DockAnchor = anchor;
+        _settings.Save();
+        ApplyDock(position, anchor);
+    }
+
+    /// <summary>A window of another app took focus. If it's a monitored browser, follow it.</summary>
+    private void OnForegroundChanged(IntPtr window)
+    {
+        var name = BrowserSession.ProcessNameOf(window); // one process lookup, however many browsers are monitored
+        var session = _sessions.FirstOrDefault(s => s.OwnsProcess(name));
+        if (session is null) return;
+        if (_settings.FollowActiveBrowser && _shell.SelectedTab != session.View)
+        {
+            _selectingFromForeground = true;
+            try { _shell.SelectedTab = session.View; }
+            finally { _selectingFromForeground = false; }
+        }
+        if (_dock is not null && _shell.SelectedTab == session.View && DockController.IsDockable(window)) _dock.Target = window;
+    }
+
+    private void OnSelectedTabChanged()
+    {
+        if (_dock is null || _selectingFromForeground) return;
+        var session = SessionFor(_shell.SelectedTab);
+        // Keep the window already followed when it belongs to the newly selected browser.
+        if (session is not null && session.Owns(_dock.Target)) return;
+        _dock.Target = DockTargetFor(session);
+    }
+
+    private void OnDockMenu(object sender, RoutedEventArgs e)
+    {
+        var menu = new ContextMenu();
+        void Position(string header, DockPosition p) => menu.Items.Add(Item(header, _settings.Dock == p, () => SetDock(p, _settings.DockAnchor)));
+        void Anchor(string header, DockAnchor a) => menu.Items.Add(Item(header, _settings.DockAnchor == a, () => SetDock(_settings.Dock, a)));
+
+        Position("_Floating window", DockPosition.Floating);
+        Position("_Right of the browser", DockPosition.Right);
+        Position("_Left of the browser", DockPosition.Left);
+        Position("_Above the browser", DockPosition.Top);
+        menu.Items.Add(new Separator());
+        Anchor("Docked to the _browser window (moves with it)", DockAnchor.Browser);
+        Anchor("Docked to the _screen edge (reserves space)", DockAnchor.ScreenEdge);
+        menu.Items.Add(new Separator());
+        menu.Items.Add(Item("F_ollow whichever browser is active", _settings.FollowActiveBrowser, () =>
+        {
+            _settings.FollowActiveBrowser = !_settings.FollowActiveBrowser;
+            _settings.Save();
+        }));
+        var onTop = Item("_Keep on top", _settings.KeepOnTop, () =>
+        {
+            _settings.KeepOnTop = !_settings.KeepOnTop;
+            _settings.Save();
+            if (_dock is not null) _dock.KeepOnTop = _settings.KeepOnTop;
+        });
+        // A screen-edge dock is always on top, like the taskbar.
+        onTop.IsEnabled = !(_settings.Dock != DockPosition.Floating && _settings.DockAnchor == DockAnchor.ScreenEdge);
+        menu.Items.Add(onTop);
+        Open(menu, sender);
+    }
+
+    private void OnMoreMenu(object sender, RoutedEventArgs e)
+    {
+        var menu = new ContextMenu();
+        menu.Items.Add(Item("_Browsers…", false, ChooseBrowsers));
+        menu.Items.Add(Item("Clear _all…", false, () => OnClearAll(this, new RoutedEventArgs())));
+        menu.Items.Add(Item("_Log", false, () => OnLog(this, new RoutedEventArgs())));
+        // Pop-ups are off while docked; the duration still applies once CertWatch floats again.
+        menu.Items.Add(new MenuItem { Header = "Pop-ups: off while docked", IsEnabled = false });
+        menu.Items.Add(Item(_shell.ThemeText, false, () => OnTheme(this, new RoutedEventArgs())));
+        menu.Items.Add(new Separator());
+        menu.Items.Add(Item("_GitHub", false, () => OpenOwnLink(_shell.RepoUrl)));
+        menu.Items.Add(Item($"_Release notes ({_shell.VersionText})", false, () => OpenOwnLink(_shell.ReleaseNotesUrl)));
+        Open(menu, sender);
+    }
+
+    private void OnBrowserMenu(object sender, RoutedEventArgs e)
+    {
+        var menu = new ContextMenu();
+        foreach (var tab in _shell.Tabs)
+        {
+            var t = tab;
+            menu.Items.Add(Item($"{t.Name} · {t.TabStatus}", _shell.SelectedTab == t, () => _shell.SelectedTab = t));
+        }
+        Open(menu, sender);
+    }
+
+    private static MenuItem Item(string header, bool isChecked, Action onClick)
+    {
+        var item = new MenuItem { Header = header, IsChecked = isChecked };
+        item.Click += (_, _) => onClick();
+        return item;
+    }
+
+    private static void Open(ContextMenu menu, object anchor)
+    {
+        menu.PlacementTarget = anchor as UIElement;
+        menu.Placement = PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
     // ---- results: tray and notifications ----
 
     private void OnChecked(BrowserSession session, SiteCheck check)
@@ -171,10 +341,12 @@ public partial class MainWindow : Window
         var status = Status.Of(treatment, c.Verdict);
         _tray.SetState(status, $"CertWatch · {browser} · {site}: {VerdictStyle.Short(treatment, c.Verdict)}");
 
+        // Docked, the verdict is already on screen beside the browser, so pop-ups stay off (still logged).
+        var docked = !_shell.IsFloating;
         foreach (var (title, text) in NotificationsFor(check, browser, site, treatment))
         {
-            _popups.Show(new PopupContent(title, text, status, session.Browser.Id, check.Probe.Endpoint));
-            LogService.Info("notify", $"{title}: {text}");
+            if (!docked) _popups.Show(new PopupContent(title, text, status, session.Browser.Id, check.Probe.Endpoint));
+            LogService.Info("notify", docked ? $"{title}: {text} (docked: no pop-up)" : $"{title}: {text}");
         }
     }
 
@@ -263,12 +435,17 @@ public partial class MainWindow : Window
         else _logWindow.Activate();
     }
 
-    // Only our own https links (repo, release notes) are opened.
     private void OnLink(object sender, RequestNavigateEventArgs e)
     {
-        if (e.Uri.Scheme == Uri.UriSchemeHttps && e.Uri.AbsoluteUri.StartsWith(ShellViewModel.Repository, StringComparison.Ordinal))
-            Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
+        OpenOwnLink(e.Uri);
         e.Handled = true;
+    }
+
+    // Only our own https links (repo, release notes) are opened.
+    private static void OpenOwnLink(Uri uri)
+    {
+        if (uri.Scheme == Uri.UriSchemeHttps && uri.AbsoluteUri.StartsWith(ShellViewModel.Repository, StringComparison.Ordinal))
+            Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
     }
 
     /// <summary>A pop-up was clicked: bring CertWatch forward on that browser's tab with the site selected.</summary>
@@ -285,16 +462,19 @@ public partial class MainWindow : Window
     {
         Show();
         if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        _dock?.Resume();
         Activate();
     }
 
     // Closing the window keeps CertWatch running in the tray; Exit is in the tray menu.
     protected override void OnClosing(CancelEventArgs e)
     {
-        WindowPlacement.Save(this);
+        // Docked bounds belong to the dock; only the floating window's place is remembered.
+        if (_shell.IsFloating) WindowPlacement.Save(this);
         if (!_exiting)
         {
             e.Cancel = true;
+            _dock?.Suspend();
             Hide();
             return;
         }
@@ -303,8 +483,9 @@ public partial class MainWindow : Window
 
     private void ExitApp()
     {
-        WindowPlacement.Save(this);
+        if (_shell.IsFloating) WindowPlacement.Save(this);
         _exiting = true;
+        _dock?.Dispose(); // gives back a reserved screen edge
         foreach (var s in _sessions.ToList()) s.Dispose();
         _popups.CloseAll();
         _tray.Dispose();

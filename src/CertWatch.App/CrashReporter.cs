@@ -39,6 +39,8 @@ internal static class CrashReporter
         // Only the first fatal error is reported; a cascade of follow-on failures would stack dialogs.
         if (Interlocked.Exchange(ref _reported, 1) != 0) return;
 
+        // Every path here ends the process: give back a reserved screen edge first, or Windows keeps it.
+        Docking.DockController.ReleaseScreenEdge();
         var logged = Write(ex, "fatal");
         if (!showDialog) return;
 

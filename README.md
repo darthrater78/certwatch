@@ -124,6 +124,32 @@ or Dark; the first run matches Windows). The **Log** window has **Debug detail**
 (address-bar reads as the host checked, never the full address; routes and issuers) and **Write log to file** (off by default), plus Open log
 folder, Copy all and Clear log.
 
+**Dock** (in the header) keeps CertWatch beside the browser instead of in its own window:
+
+- **Right of the browser** or **Left of the browser**: a 380px panel with the card, stacked for the
+  narrow width, and the sites that browser visited (most recent first; click one to show its saved
+  result).
+- **Above the browser**: a 64px strip with the status tile, verdict, path and as many facts as fit.
+- **Floating window**: the full window, back where you left it.
+
+Pick what it's docked to:
+
+- **The browser window** (moves with it): CertWatch follows the browser window as you move or resize
+  it, and hides while the browser is minimised. If the browser is maximised there's no room beside it,
+  so CertWatch covers its edge and says so; make the browser smaller or use the screen edge instead.
+- **The screen edge** (reserves space): CertWatch takes a strip of the screen the way the taskbar
+  does, and Windows fits maximised windows, including the browser, into the rest. It stays on top
+  except while a full-screen app is showing.
+
+Pop-ups are off while CertWatch is docked, since the verdict is already on screen beside the
+browser; they're still written to the log, and come back when you float the window again.
+**Follow whichever browser is active** (on by default) switches to the tab of the monitored browser
+you clicked into, so the docked view always shows the page you're on. **Keep on top** keeps the window
+above others. Docked, the compact header has the browser name (pick which browser to show), **Dock**,
+and **⋯** for Browsers…, Clear all…, Log, Theme, GitHub and Release notes. The side panel's
+footer has the version and both links. CertWatch only ever moves its own window: it never moves,
+resizes or brings forward a browser window.
+
 Closing the window keeps CertWatch in the tray (the icon takes the latest verdict's colour); exit
 from the tray menu, which also has **Show test pop-up**.
 
@@ -196,6 +222,16 @@ How CertWatch is built with regard to security, in statements you can check agai
   that connection, and it requires TLS 1.2 or 1.3. Verdicts compare the chain against the bundled
   Mozilla root list (`src/CertWatch.Core/Resources/public-roots.pem`, from curl.se), matched by
   public key, and against Certificate Transparency proofs.
+- **Docking reads window positions, and moves only CertWatch.** Docked beside the browser,
+  CertWatch reads the browser window's position and size (`DwmGetWindowAttribute`, `GetWindowRect`)
+  and is told when it moves or takes focus through out-of-context window events
+  (`SetWinEventHook` with `WINEVENT_OUTOFCONTEXT`): Windows posts the events to CertWatch's own
+  message loop, and no code is loaded into the browser. The position events are subscribed for the
+  followed browser's process only. Docked to the screen edge, CertWatch registers its own window as
+  an app bar (`SHAppBarMessage`) and Windows itself fits other windows around it. CertWatch moves only
+  its own window (`SetWindowPos` on its own handle); it never moves, resizes, re-parents, owns or
+  activates a browser window. The reserved edge is given back when you undock, hide CertWatch to the
+  tray, minimise it, exit, or when CertWatch crashes.
 - **Privileges.** Runs as the signed-in user (`asInvoker`), never elevated. It writes only under
   `%LOCALAPPDATA%\CertWatch` (plus an exported root, wherever you choose to save it), and nothing
   to the registry; it reads one registry value, your Windows light/dark setting, on first run. P/Invoke calls load system DLLs from
@@ -210,8 +246,8 @@ How CertWatch is built with regard to security, in statements you can check agai
     under the current user's account, so only that account on that PC can unwrap it. History that
     can't be decrypted (for example, copied from another account) is set aside and a fresh database
     started.
-  - `window.json`, `settings.json`: window position, theme, pop-up duration and log options, plain
-    (not sensitive).
+  - `window.json`, `settings.json`: window position, theme, pop-up duration, log options and dock
+    settings, plain (not sensitive).
   - `crash.log`: written only if CertWatch hits an unexpected error. Plain text: the error and where
     it happened, which can include a site's name. Capped at 1 MB; delete it any time.
   - `logs\certwatch-<date>.log`: written **only** when you turn on **Write log to file**. Plain text,
@@ -232,6 +268,10 @@ How CertWatch is built with regard to security, in statements you can check agai
 
 ### Changes
 
+- 2026-11-18: Docking. CertWatch can dock beside or above the browser. It reads the browser
+  window's position and gets window events out of context (nothing is loaded into the browser),
+  and it moves only its own window. Screen-edge docking reserves space through Windows' app bar API,
+  and the reservation is released on undock, hide, minimise, exit and crash.
 - 2026-11-17: Browsers are monitored only once you tick them (**Browsers…**); nothing is read on first
   run. Debug logging now records only the host checked, not the full address-bar text, which could
   include paths and query strings (sign-in tokens, for example). Security pass: confirmed CertWatch

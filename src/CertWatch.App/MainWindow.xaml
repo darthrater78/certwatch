@@ -7,10 +7,29 @@
         FontFamily="{StaticResource UiFont}" FontSize="13">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <!-- Icons for the docked layouts' compact buttons (24-unit strokes) -->
+        <Geometry x:Key="IconDockSide">M3,4 H21 V20 H3 Z M15,4 V20</Geometry>
+        <Geometry x:Key="IconMore">M5,12 V12.01 M12,12 V12.01 M19,12 V12.01</Geometry>
+        <Geometry x:Key="IconChevron">M6,9 L12,15 L18,9</Geometry>
+        <Style x:Key="IconGlyph" TargetType="Path">
+            <Setter Property="Stretch" Value="Uniform"/>
+            <Setter Property="StrokeThickness" Value="2"/>
+            <Setter Property="StrokeStartLineCap" Value="Round"/>
+            <Setter Property="StrokeEndLineCap" Value="Round"/>
+            <Setter Property="StrokeLineJoin" Value="Round"/>
+        </Style>
+        <Style x:Key="HideWhenEmpty" TargetType="FrameworkElement">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
     <DockPanel>
-        <!-- App header: identity, version, required links, Browsers, Clear all, Log, Pop-ups, Theme -->
-        <Border DockPanel.Dock="Top" Background="{DynamicResource Brand}" Height="36">
+        <!-- Full header (floating window): identity, version, required links, Browsers, Clear all, Log, Pop-ups, Dock, Theme -->
+        <Border DockPanel.Dock="Top" Background="{DynamicResource Brand}" Height="36"
+                Visibility="{Binding IsFloating, Converter={StaticResource BoolToVis}}">
             <DockPanel LastChildFill="False" Margin="10,0,0,0">
                 <Image Source="Assets/CertWatch-256.png" Width="20" Height="20" VerticalAlignment="Center"
                        RenderOptions.BitmapScalingMode="HighQuality" AutomationProperties.Name="CertWatch icon"/>
@@ -24,6 +43,8 @@
                 </TextBlock>
                 <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}" Content="{Binding ThemeText}" Click="OnTheme"
                         ToolTip="Switch theme: Flashbang (bright) or Dark"/>
+                <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}" Content="_Dock" Click="OnDockMenu"
+                        ToolTip="Dock CertWatch beside or above the browser"/>
                 <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}" Content="{Binding PopupText}" Click="OnPopupDuration"
                         ToolTip="How long pop-ups stay: until dismissed, 10 s, 30 s or 1 min"/>
                 <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}" Content="_Log" Click="OnLog"
@@ -35,11 +56,107 @@
             </DockPanel>
         </Border>
 
+        <!-- Compact header (docked at the side): identity, which browser, Dock, More -->
+        <Border DockPanel.Dock="Top" Background="{DynamicResource Brand}" Height="36"
+                Visibility="{Binding IsSideDocked, Converter={StaticResource BoolToVis}}">
+            <DockPanel LastChildFill="False" Margin="10,0,2,0">
+                <Image Source="Assets/CertWatch-256.png" Width="20" Height="20" VerticalAlignment="Center"
+                       RenderOptions.BitmapScalingMode="HighQuality" AutomationProperties.Name="CertWatch icon"/>
+                <TextBlock Text="CertWatch" Foreground="{DynamicResource OnBrand}" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}" Padding="8,0" Click="OnMoreMenu"
+                        ToolTip="Browsers, log, pop-ups, theme and links" AutomationProperties.Name="More">
+                    <Path Style="{StaticResource IconGlyph}" Data="{StaticResource IconMore}" Stroke="{DynamicResource OnBrand}" StrokeThickness="3" Width="16" Height="16"/>
+                </Button>
+                <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}" Padding="8,0" Click="OnDockMenu"
+                        ToolTip="Dock CertWatch beside or above the browser, or float it" AutomationProperties.Name="Dock">
+                    <Path Style="{StaticResource IconGlyph}" Data="{StaticResource IconDockSide}" Stroke="{DynamicResource OnBrand}" Width="16" Height="16"/>
+                </Button>
+                <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}" Padding="8,0" Click="OnBrowserMenu"
+                        ToolTip="Which browser's results to show" Visibility="{Binding HasTabs, Converter={StaticResource BoolToVis}}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding SelectedTab.Name}" Foreground="{DynamicResource OnBrand}" MaxWidth="140" TextTrimming="CharacterEllipsis"/>
+                        <Path Style="{StaticResource IconGlyph}" Data="{StaticResource IconChevron}" Stroke="{DynamicResource OnBrandMuted}" Width="10" Height="10" Margin="6,1,0,0"/>
+                    </StackPanel>
+                </Button>
+            </DockPanel>
+        </Border>
+
+        <!-- Footer (docked at the side): version and the required links -->
+        <Border DockPanel.Dock="Bottom" Background="{DynamicResource SurfaceAlt}" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="12,5"
+                Visibility="{Binding IsSideDocked, Converter={StaticResource BoolToVis}}">
+            <TextBlock FontSize="11" Style="{StaticResource Muted}">
+                <Run Text="{Binding VersionText, Mode=OneWay}"/> ·
+                <Hyperlink NavigateUri="{Binding RepoUrl}" RequestNavigate="OnLink">GitHub</Hyperlink> ·
+                <Hyperlink NavigateUri="{Binding ReleaseNotesUrl}" RequestNavigate="OnLink">Release notes</Hyperlink>
+            </TextBlock>
+        </Border>
+
+        <!-- Hint (docked at the side): covering the browser's edge, or waiting for its window -->
+        <Border DockPanel.Dock="Top" Background="{DynamicResource NeutralTint}" Padding="12,6"
+                Tag="{Binding DockHint}">
+            <Border.Style>
+                <Style TargetType="Border" BasedOn="{StaticResource HideWhenEmpty}">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsSideDocked}" Value="False"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <TextBlock Text="{Binding DockHint}" Foreground="{DynamicResource OnNeutralTint}" FontSize="12" TextWrapping="Wrap"/>
+        </Border>
+
+        <!-- Top strip (docked above): identity, the selected browser's verdict row, hint, then which browser, Dock, More -->
+        <Grid DockPanel.Dock="Top" Height="64" Background="{DynamicResource Surface}"
+              Visibility="{Binding IsTopDocked, Converter={StaticResource BoolToVis}}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Border Grid.Column="0" Background="{DynamicResource Brand}" Width="36">
+                <Image Source="Assets/CertWatch-256.png" Width="20" Height="20" VerticalAlignment="Center"
+                       RenderOptions.BitmapScalingMode="HighQuality" AutomationProperties.Name="CertWatch" ToolTip="{Binding VersionText}"/>
+            </Border>
+            <views:DockedStrip Grid.Column="1" DataContext="{Binding SelectedTab}"
+                               Visibility="{Binding DataContext.ShowTopStrip, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0" VerticalAlignment="Center"
+                        Visibility="{Binding ShowTopEmpty, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="No browsers are monitored yet." Style="{StaticResource Muted}" VerticalAlignment="Center"/>
+                <Button Style="{StaticResource PrimaryButtonStyle}" Height="28" Padding="10,0" Content="_Choose browsers…" Click="OnBrowsers" Margin="12,0,0,0"/>
+            </StackPanel>
+            <TextBlock Grid.Column="2" Text="{Binding DockHint}" Style="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap"
+                       MaxWidth="260" Margin="8,0" VerticalAlignment="Center"/>
+            <StackPanel Grid.Column="3" Orientation="Horizontal" Background="{DynamicResource Brand}">
+                <Button Style="{StaticResource HeaderButton}" Height="64" Padding="10,0" Click="OnBrowserMenu"
+                        ToolTip="Which browser's results to show" Visibility="{Binding HasTabs, Converter={StaticResource BoolToVis}}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding SelectedTab.Name}" Foreground="{DynamicResource OnBrand}" MaxWidth="120" TextTrimming="CharacterEllipsis"/>
+                        <Path Style="{StaticResource IconGlyph}" Data="{StaticResource IconChevron}" Stroke="{DynamicResource OnBrandMuted}" Width="10" Height="10" Margin="6,1,0,0"/>
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource HeaderButton}" Height="64" Padding="10,0" Click="OnDockMenu"
+                        ToolTip="Dock CertWatch beside or above the browser, or float it" AutomationProperties.Name="Dock">
+                    <Path Style="{StaticResource IconGlyph}" Data="{StaticResource IconDockSide}" Stroke="{DynamicResource OnBrand}" Width="16" Height="16"/>
+                </Button>
+                <Button Style="{StaticResource HeaderButton}" Height="64" Padding="10,0" Click="OnMoreMenu"
+                        ToolTip="Browsers, log, pop-ups, theme and links" AutomationProperties.Name="More">
+                    <Path Style="{StaticResource IconGlyph}" Data="{StaticResource IconMore}" Stroke="{DynamicResource OnBrand}" StrokeThickness="3" Width="16" Height="16"/>
+                </Button>
+            </StackPanel>
+        </Grid>
+
         <Grid>
+            <Grid.Style>
+                <Style TargetType="Grid">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsTopDocked}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
             <TabControl ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab, Mode=TwoWay}"
                         Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0"
                         Padding="0" Margin="0,6,0,0"
-                        Visibility="{Binding HasTabs, Converter={StaticResource BoolToVis}}"
+                        Visibility="{Binding ShowTabs, Converter={StaticResource BoolToVis}}"
                         AutomationProperties.Name="Browsers">
                 <TabControl.Resources>
                     <Style TargetType="TabPanel"><Setter Property="Margin" Value="10,0,0,0"/></Style>
@@ -62,15 +179,14 @@
                 </TabControl.ContentTemplate>
             </TabControl>
 
-            <StackPanel Margin="40" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="460">
-                <StackPanel.Style>
-                    <Style TargetType="StackPanel">
-                        <Setter Property="Visibility" Value="Collapsed"/>
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding HasTabs}" Value="False"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </StackPanel.Style>
+            <!-- The panel fills the height (the site list takes what's left); below 560px the whole panel scrolls -->
+            <ScrollViewer x:Name="SidePage" VerticalScrollBarVisibility="Auto" Background="{DynamicResource Ground}"
+                          Visibility="{Binding ShowSidePanel, Converter={StaticResource BoolToVis}}">
+                <views:DockedPanel DataContext="{Binding SelectedTab}" MinHeight="560" Height="{Binding ViewportHeight, ElementName=SidePage}"/>
+            </ScrollViewer>
+
+            <StackPanel Margin="24,40" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="460"
+                        Visibility="{Binding ShowEmptyPage, Converter={StaticResource BoolToVis}}">
                 <TextBlock Text="{Binding EmptyText}" Style="{StaticResource Muted}" FontSize="15" TextWrapping="Wrap" TextAlignment="Center"/>
                 <!-- Nothing ticked (first run, or after "Monitor none"): one way in, the picker -->
                 <Button Content="_Choose browsers…" Click="OnBrowsers"

@@ -23,6 +23,11 @@ internal sealed class BrowserSession : IDisposable
     private readonly SiteMonitor _monitor;
     private readonly BrowserFollower _follower;
     private readonly IRouteLookup? _routes;
+    private readonly ICertProbe _probe;
+    private readonly InspectionClassifier _classifier;
+    // The address that served each site on the browser's own path last time (UI thread only; bounded).
+    private readonly Dictionary<string, System.Net.IPAddress> _directCache = new(StringComparer.OrdinalIgnoreCase);
+    private CancellationTokenSource? _directSearch;
 
     public BrowserSession(BrowserDefinition browser, ICertProbe probe, InspectionClassifier classifier,
         HistoryStore history, TimeSpan recheckInterval, Dispatcher dispatcher, IRouteLookup? routes)
@@ -30,6 +35,8 @@ internal sealed class BrowserSession : IDisposable
         Browser = browser;
         _history = history;
         _routes = routes;
+        _probe = probe;
+        _classifier = classifier;
         _dispatcher = dispatcher;
 
         View = new BrowserTabViewModel(browser);
@@ -53,6 +60,8 @@ internal sealed class BrowserSession : IDisposable
     public BrowserTabViewModel View { get; }
     /// <summary>Raised on the UI thread after every check of the current site.</summary>
     public event Action<BrowserSession, SiteCheck, BrowserPathResult>? Checked;
+    /// <summary>Raised on the UI thread when the search for an enterprise browser's own path ends.</summary>
+    public event Action<BrowserSession, SiteCheck, DirectPathResult>? DirectPathChecked;
 
     public void RecheckNow() => _monitor.RecheckNow();
 
@@ -99,6 +108,7 @@ internal sealed class BrowserSession : IDisposable
 
     private void OnSiteChanged(SiteEndpoint? site)
     {
+        CancelDirectSearch();
         LogService.Info(Browser.Id, site is { } s ? $"Now on {s}" : "No HTTPS page in focus");
         if (site is { } x) View.ShowChecking(x);
     }
@@ -113,6 +123,117 @@ internal sealed class BrowserSession : IDisposable
         if (path.Match == BrowserPathMatch.Different)
             LogService.Info(Browser.Id, $"{check.Probe.Endpoint}: {Browser.DisplayName} isn't connected to {check.Probe.RemoteAddress} (CertWatch's tunnel address); it uses its own path{(path.BrowserInterfaces.Count == 0 ? "" : $" via {string.Join(", ", path.BrowserInterfaces)}")}");
         Checked?.Invoke(this, check, path);
+
+        // An enterprise browser can go out on its own path while CertWatch is steered: follow its address too.
+        if (Browser.Enterprise && check.Egress?.Kind == EgressKind.Tunnel) StartDirectSearch(check);
+        else
+        {
+            CancelDirectSearch();
+            View.ClearDirectPath();
+        }
+    }
+
+    private void CancelDirectSearch()
+    {
+        _directSearch?.Cancel();
+        _directSearch?.Dispose();
+        _directSearch = null;
+    }
+
+    /// <summary>
+    /// Handshakes (SNI = the site) to the direct addresses the browser is connected to, in parallel, at
+    /// most <see cref="DirectPath.MaxAddresses"/>; the first, in rank order, that serves the site is the
+    /// browser's own path. Runs off the UI thread; the result comes back through the dispatcher.
+    /// </summary>
+    private void StartDirectSearch(SiteCheck check)
+    {
+        CancelDirectSearch();
+        var cts = _directSearch = new CancellationTokenSource();
+        var site = check.Probe.Endpoint;
+        var lastFound = _directCache.GetValueOrDefault(site.Host);
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var result = await FindDirectPathAsync(check, lastFound, cts.Token);
+                _ = _dispatcher.BeginInvoke(() => { if (!cts.IsCancellationRequested) OnDirectPath(check, result); });
+            }
+            catch (OperationCanceledException)
+            {
+                // The site changed or a newer check started.
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or ExternalException)
+            {
+                LogService.Info(Browser.Id, $"{site}: couldn't check the browser's own path ({ex.Message})");
+            }
+        });
+    }
+
+    private async Task<DirectPathResult> FindDirectPathAsync(SiteCheck check, System.Net.IPAddress? lastFound, CancellationToken ct)
+    {
+        var site = check.Probe.Endpoint;
+        var connections = TcpConnections.EstablishedFor(ProcessIds());
+        var candidates = DirectPath.Candidates(connections, site.Port, check.Probe.RemoteAddress,
+            ip => EgressFor(ip)?.Kind ?? EgressKind.Unknown, lastFound);
+        if (candidates.Count == 0) return new DirectPathResult(DirectPathOutcome.NotFound, null, 0);
+
+        // Re-checks: the address that served the site last time, alone, while it still does.
+        var tried = 0;
+        ProbeResult? served = null;
+        if (lastFound is not null && candidates[0].Equals(lastFound))
+        {
+            tried = 1;
+            var again = await _probe.ProbeAtAsync(site, lastFound, ct);
+            if (DirectPath.ServesSite(again)) served = again;
+        }
+        if (served is null)
+        {
+            var rest = candidates.Where(ip => !ip.Equals(lastFound)).ToList();
+            var probes = await Task.WhenAll(rest.Select(ip => _probe.ProbeAtAsync(site, ip, ct)));
+            tried += rest.Count;
+            served = probes.FirstOrDefault(DirectPath.ServesSite);
+        }
+        ct.ThrowIfCancellationRequested();
+        if (served is null) return new DirectPathResult(DirectPathOutcome.NotFound, null, tried);
+
+        var classification = _classifier.Classify(served);
+        var egress = served.RemoteAddress is { } a ? EgressFor(a) : null;
+        var direct = new SiteCheck(served, classification, SiteMonitor.BuildObservation(served, classification, egress, Browser.Id, ChangeKind.None), egress);
+        // Inspected by the same issuer as CertWatch's own check: the agent caught this handshake too.
+        var captured = classification.Verdict == Verdict.Inspected && check.Classification.Verdict == Verdict.Inspected
+                       && string.Equals(classification.IssuerName, check.Classification.IssuerName, StringComparison.Ordinal);
+        return new DirectPathResult(captured ? DirectPathOutcome.Captured : DirectPathOutcome.Found, direct, tried);
+    }
+
+    private EgressInfo? EgressFor(System.Net.IPAddress address)
+    {
+        try
+        {
+            return _routes?.Lookup(address) is { } facts ? EgressClassifier.Classify(facts) : null;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ExternalException)
+        {
+            return null;
+        }
+    }
+
+    private void OnDirectPath(SiteCheck check, DirectPathResult result)
+    {
+        var site = check.Probe.Endpoint;
+        if (result is { Outcome: DirectPathOutcome.Found, Address: { } found })
+        {
+            if (_directCache.Count >= 256) _directCache.Clear();
+            _directCache[site.Host] = found;
+        }
+        var d = result.Check;
+        LogService.Info(Browser.Id, result.Outcome switch
+        {
+            DirectPathOutcome.Found => $"{site}: {Browser.DisplayName}'s own path via {result.Address} ({d!.Egress?.InterfaceLabel ?? "route unknown"} {d.Egress?.Kind}): {d.Classification.Verdict}, issuer {d.Classification.IssuerName}",
+            DirectPathOutcome.Captured => $"{site}: {Browser.DisplayName} is connected to {result.Address}, but CertWatch's handshake there was inspected too",
+            _ => $"{site}: none of {result.AddressesTried} direct connection(s) of {Browser.DisplayName} served the site",
+        });
+        View.ShowDirectPath(site, result);
+        DirectPathChecked?.Invoke(this, check, result);
     }
 
     /// <summary>
@@ -205,6 +326,7 @@ internal sealed class BrowserSession : IDisposable
 
     public void Dispose()
     {
+        CancelDirectSearch();
         _follower.Dispose();
         _ = _monitor.DisposeAsync().AsTask();
     }

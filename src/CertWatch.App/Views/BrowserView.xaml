@@ -131,7 +131,7 @@
 
                     <!-- Browser on its own path: offer to read the certificate viewer the user opens -->
                     <Button Style="{StaticResource SmallButton}" Content="{Binding ViewerButtonText}" Command="{Binding ToggleViewerCommand}" Margin="12,0,12,8"
-                            Visibility="{Binding OwnPathDetected, Converter={StaticResource BoolToVis}}" HorizontalAlignment="Left"
+                            Visibility="{Binding OfferViewer, Converter={StaticResource BoolToVis}}" HorizontalAlignment="Left"
                             ToolTip="Read the certificate viewer you open in this browser (read-only) and compare it with CertWatch's own connection"/>
 
                     <!-- Notes: browser on its own path, certificate viewer comparison, mTLS, earlier inspection -->

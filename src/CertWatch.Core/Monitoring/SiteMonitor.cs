@@ -95,6 +95,29 @@ public sealed class SiteMonitor : IAsyncDisposable
         }
     }
 
+    /// <summary>The record of one handshake, as saved to history (also used for a result that isn't saved).</summary>
+    public static Observation BuildObservation(ProbeResult probe, Classification classification, EgressInfo? egress, string browserId, ChangeKind change)
+    {
+        var site = probe.Endpoint;
+        var leaf = probe.Leaf;
+        return new Observation(
+            probe.Timestamp, site.Host, site.Port, browserId,
+            classification.Verdict, classification.Reason, classification.Vendor,
+            probe.LeafFingerprint,
+            leaf?.GetNameInfo(X509NameType.SimpleName, false),
+            classification.IssuerName, classification.RootName,
+            leaf is null ? null : new DateTimeOffset(leaf.NotAfter.ToUniversalTime()),
+            probe.Protocol == default ? null : probe.Protocol.ToString(),
+            classification.MutualTls,
+            change)
+        {
+            RemoteAddress = probe.RemoteAddress?.ToString(),
+            EgressInterface = egress?.InterfaceLabel,
+            EgressKind = egress?.Kind.ToString(),
+            EgressRoute = egress?.RouteLabel,
+        };
+    }
+
     public async Task<SiteCheck> CheckAsync(SiteEndpoint site, CancellationToken ct = default)
     {
         var probe = await _probe.ProbeAsync(site, ct);
@@ -117,23 +140,7 @@ public sealed class SiteMonitor : IAsyncDisposable
         var change = ChangeDetector.Detect(previous, classification.Verdict, probe.LeafFingerprint, classification.IssuerName,
             egress?.InterfaceLabel);
 
-        var leaf = probe.Leaf;
-        var observation = new Observation(
-            probe.Timestamp, site.Host, site.Port, _browserId,
-            classification.Verdict, classification.Reason, classification.Vendor,
-            probe.LeafFingerprint,
-            leaf?.GetNameInfo(X509NameType.SimpleName, false),
-            classification.IssuerName, classification.RootName,
-            leaf is null ? null : new DateTimeOffset(leaf.NotAfter.ToUniversalTime()),
-            probe.Protocol == default ? null : probe.Protocol.ToString(),
-            classification.MutualTls,
-            change)
-        {
-            RemoteAddress = probe.RemoteAddress?.ToString(),
-            EgressInterface = egress?.InterfaceLabel,
-            EgressKind = egress?.Kind.ToString(),
-            EgressRoute = egress?.RouteLabel,
-        };
+        var observation = BuildObservation(probe, classification, egress, _browserId, change);
 
         if (change == ChangeKind.None && previous is not null)
         {

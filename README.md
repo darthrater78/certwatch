@@ -217,13 +217,28 @@ the site's row shows **Own path**. No inspected or steered pop-up is raised for 
 judge direct paths this way (a site's public addresses vary between lookups) or HTTP/3, which runs
 over UDP and isn't in the TCP table; those keep the normal verdict.
 
-When it detects its own path, the card offers **Compare with the browser's certificate viewer**.
+**Enterprise browsers (Island) going out directly.** An enterprise browser can send a site straight
+out while CertWatch's own connection is caught by the device agent's web gateway steering, and both
+can still hold a connection to the site's tunnel address, so the check above can't tell them apart.
+For an enterprise browser, whenever CertWatch's own check went through the tunnel, CertWatch also
+follows the browser: it takes the browser's port-443 connections that leave by the normal network
+(not the tunnel), at most 8, and makes its usual read-only handshake to each address with the site's
+name. The address whose certificate is issued for that site is the browser's own path, and the card
+shows that result (for example **Direct · not inspected**, Let's Encrypt), with a note that other
+apps on this PC, CertWatch included, are steered and inspected. Re-checks try only the address that
+served the site last time while it still does. If CertWatch's handshake to the browser's address is
+inspected too (the agent catches all of CertWatch's traffic), or no address serves the site, the card
+says so and keeps CertWatch's own result. Tray colour and pop-ups follow the browser's own result.
+
+When it detects its own path, and always on an enterprise browser's card, the card offers **Compare with the browser's certificate viewer**.
 Turn it on, then open the browser's certificate viewer for the site (padlock → certificate).
 CertWatch reads the viewer's issuer and SHA-256 fingerprint through UI Automation, the same
 read-only way it reads the address bar, and the card says whether the browser sees the same
 certificate as CertWatch's connection, or which one it got instead. It works with Chromium-family
 viewers (Edge, Chrome, Island, Brave and others); Firefox shows certificates as a page, which isn't
-read. The setting is saved, and the same button (or **⋯** when docked) turns it off.
+read. If the viewer shows a different certificate from the one on the card, the headline becomes
+**Browser sees a different certificate** and the row shows **Different cert**. The setting is
+saved, and the same button (or **⋯** when docked) turns it off.
 
 ## Security architecture
 
@@ -289,7 +304,11 @@ How CertWatch is built with regard to security, in statements you can check agai
     and it names the sites you visit, so it's off by default; **Clear log** and **Clear all**
     delete these files. Without it, the log lives only in memory (last 5,000 entries).
 - **Network exposure.** CertWatch listens on nothing. Outbound, it makes one TLS handshake per site
-  you visit, through the system proxy when one is set. It never starts or controls a browser.
+  you visit, through the system proxy when one is set. For an enterprise browser whose check went
+  through the ZTNA tunnel, it also makes the same handshake to up to 8 addresses the browser is
+  already connected to (directly, no proxy), so the site's name is sent as SNI to those servers,
+  some of which won't host it; re-checks use only the address that served the site. It never starts
+  or controls a browser.
 - **Dependencies and releases.** NuGet packages are pinned and audited at every security gate
   (`dotnet list package --vulnerable --include-transitive`), and Dependabot watches them. The
   project stays on the .NET 10 LTS line, and the self-contained build pins the newest .NET security
@@ -303,6 +322,10 @@ How CertWatch is built with regard to security, in statements you can check agai
 
 ### Changes
 
+- 2026-11-18: Enterprise browsers' own path. For an enterprise browser on a tunnelled result,
+  CertWatch makes its read-only handshake to up to 8 direct addresses the browser is connected to
+  (SNI = the site, no proxy) to see the certificate on the browser's own path. Nothing new listens,
+  and nothing is sent to or asked of the browser.
 - 2026-11-18: Own-path detection. CertWatch reads the TCP connection table (read-only) to see
   whether the browser is connected to the address CertWatch checked, and stops presenting its own
   result as the browser's when it isn't. Optional, off by default: reading the certificate viewer

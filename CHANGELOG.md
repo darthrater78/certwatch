@@ -16,9 +16,14 @@ All notable changes to CertWatch. Versions are the UTC date of the release.
   the card reads **Browser uses its own path** instead of presenting CertWatch's own result as the
   browser's, and the site's row shows **Own path**. It's read from Windows' TCP connection table;
   nothing is asked of the browser.
-- **Compare with the browser's certificate viewer**, offered on the card when the browser takes its
-  own path (off by default): open the browser's certificate viewer and CertWatch reads its issuer and
-  fingerprint (read-only) and shows whether the browser got the same certificate.
+- **Enterprise browsers' own path** (Island): when CertWatch's own check is steered through the
+  tunnel, it also checks the addresses the browser is connected to directly and shows the browser's
+  own result (for example **Direct · not inspected**) with CertWatch's steered result as a note. Tray
+  colour and pop-ups follow the browser's result.
+- **Compare with the browser's certificate viewer**, offered on enterprise-browser cards and when
+  the browser takes its own path (off by default): open the browser's certificate viewer and
+  CertWatch reads its issuer and fingerprint (read-only). A different certificate turns the headline
+  into **Browser sees a different certificate**.
 
 ## [2026.11.17-2] - 2026-11-17
 

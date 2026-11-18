@@ -139,6 +139,7 @@ public partial class MainWindow : Window
     private void RemoveSession(BrowserSession session)
     {
         session.Checked -= OnChecked;
+        session.DirectPathChecked -= OnDirectPathChecked;
         session.View.ViewerToggleRequested -= SetViewerReading;
         // Stopping the follower waits for its poll to finish; keep that wait off the UI thread.
         _ = Task.Run(session.Dispose);
@@ -168,6 +169,7 @@ public partial class MainWindow : Window
         if (existing is not null) return existing;
         var session = new BrowserSession(browser, _probe, _classifier, _history, _options.RecheckInterval, Dispatcher, _routes);
         session.Checked += OnChecked;
+        session.DirectPathChecked += OnDirectPathChecked;
         session.View.ViewerReadingEnabled = _settings.ReadCertificateViewer;
         session.View.ViewerToggleRequested += SetViewerReading;
         _sessions.Add(session);
@@ -366,17 +368,44 @@ public partial class MainWindow : Window
 
     private void OnChecked(BrowserSession session, SiteCheck check, BrowserPathResult path)
     {
-        var c = check.Classification;
         var browser = session.Browser.DisplayName;
         var site = check.Probe.Endpoint.ToString();
-        var treatment = PathTreatment.Of(c.Verdict, check.Egress?.Kind.ToString());
-        var status = Status.Of(treatment, c.Verdict);
         if (path.Match == BrowserPathMatch.Different)
         {
             // CertWatch's result isn't the browser's: no inspected/steered tray colour or pop-up for it.
             _tray.SetState(StatusKind.Neutral, $"CertWatch · {browser} · {site}: browser uses its own path");
             return;
         }
+        if (session.Browser.Enterprise && check.Egress?.Kind == EgressKind.Tunnel)
+        {
+            // Wait for the browser's own path (OnDirectPathChecked) before colouring the tray or popping up.
+            _tray.SetState(StatusKind.Neutral, $"CertWatch · {browser} · {site}: checking the browser's own path");
+            return;
+        }
+        Report(session, check);
+    }
+
+    /// <summary>The enterprise browser's own path: report it like any result; otherwise fall back to CertWatch's, without pop-ups.</summary>
+    private void OnDirectPathChecked(BrowserSession session, SiteCheck check, DirectPathResult result)
+    {
+        if (result is { Outcome: DirectPathOutcome.Found, Check: { } own })
+        {
+            Report(session, own);
+            return;
+        }
+        var c = check.Classification;
+        var treatment = PathTreatment.Of(c.Verdict, check.Egress?.Kind.ToString());
+        _tray.SetState(Status.Of(treatment, c.Verdict),
+            $"CertWatch · {session.Browser.DisplayName} · {check.Probe.Endpoint}: {VerdictStyle.Short(treatment, c.Verdict)} (CertWatch's own connection)");
+    }
+
+    private void Report(BrowserSession session, SiteCheck check)
+    {
+        var c = check.Classification;
+        var browser = session.Browser.DisplayName;
+        var site = check.Probe.Endpoint.ToString();
+        var treatment = PathTreatment.Of(c.Verdict, check.Egress?.Kind.ToString());
+        var status = Status.Of(treatment, c.Verdict);
         _tray.SetState(status, $"CertWatch · {browser} · {site}: {VerdictStyle.Short(treatment, c.Verdict)}");
 
         // Docked, the verdict is already on screen beside the browser, so pop-ups stay off (still logged).

@@ -75,15 +75,32 @@ public sealed class VerdictCard : Observable
     /// <param name="path">Whether the browser takes CertWatch's path; Different turns the headline into "Browser uses its own path".</param>
     /// <param name="viewer">What the browser's own certificate viewer showed for this site, when the user opened it.</param>
     /// <param name="viewerHint">A prompt to open the browser's certificate viewer, shown as a note.</param>
-    public void ShowLive(SiteCheck check, string? pastInspection, BrowserPathResult? path = null, CertViewerReading? viewer = null, string? viewerHint = null)
+    /// <param name="direct">An enterprise browser's own path: when found, the card shows that result and CertWatch's steered one becomes a note.</param>
+    public void ShowLive(SiteCheck check, string? pastInspection, BrowserPathResult? path = null, CertViewerReading? viewer = null,
+        string? viewerHint = null, DirectPathResult? direct = null)
     {
-        Render(FromCheck(check), live: true, pastInspection, path, viewer);
+        if (direct is { Outcome: DirectPathOutcome.Found, Check: { } own })
+        {
+            Render(FromCheck(own, "browser's own path"), live: true, pastInspection, null, viewer, directAddress: own.Probe.RemoteAddress?.ToString());
+            Notes.Insert(0, new CardNote($"Other apps on this PC, CertWatch's own check included, are steered through {check.Egress?.InterfaceLabel ?? "the tunnel"}: {HeadlineOf(check)}, issuer {check.Classification.IssuerName ?? "—"}.", StatusKind.Neutral));
+        }
+        else
+        {
+            Render(FromCheck(check), live: true, pastInspection, path, viewer);
+            if (direct?.Outcome == DirectPathOutcome.Captured)
+                Notes.Add(new CardNote($"CertWatch also checked {direct.Address}, the address {_browserName} is connected to for this site, and was inspected there too: the agent catches CertWatch's traffic whatever the address, so the browser's own result can't be seen this way. Compare with the browser's certificate viewer.", StatusKind.Neutral));
+            else if (direct?.Outcome == DirectPathOutcome.NotFound)
+                Notes.Add(new CardNote($"This is CertWatch's own connection. None of {_browserName}'s direct connections ({direct.AddressesTried} tried) served this site, so its own path wasn't found; if it uses its own gateway, compare with its certificate viewer.", StatusKind.Neutral));
+        }
         if (viewerHint is not null) Notes.Add(new CardNote(viewerHint, StatusKind.Neutral));
     }
 
+    private static string HeadlineOf(SiteCheck c) =>
+        VerdictStyle.Headline(PathTreatment.Of(c.Classification.Verdict, c.Egress?.Kind.ToString()), c.Classification.Verdict, c.Classification.Vendor, c.Classification.MutualTls);
+
     public void ShowSaved(Observation o, string? pastInspection) => Render(FromObservation(o), live: false, pastInspection);
 
-    private static CardData FromCheck(SiteCheck check)
+    private static CardData FromCheck(SiteCheck check, string source = "own connection")
     {
         var c = check.Classification;
         var p = check.Probe;
@@ -91,7 +108,7 @@ public sealed class VerdictCard : Observable
         return new CardData(p.Endpoint.ToString(), o.Timestamp, c.Verdict, c.Reason, c.Vendor, c.IssuerName, c.RootName,
             c.RootIsPublic, o.NotAfter, Protocol(o.Protocol, p.CipherSuite?.ToString()), o.LeafFingerprint, p.RemoteAddress?.ToString(),
             check.Egress?.Kind.ToString(), check.Egress?.InterfaceLabel, check.Egress?.Facts.InterfaceDescription,
-            check.Egress?.RouteLabel, c.MutualTls, "own connection", o.Change, p.Chain);
+            check.Egress?.RouteLabel, c.MutualTls, source, o.Change, p.Chain);
     }
 
     private static CardData FromObservation(Observation o) => new(
@@ -103,7 +120,7 @@ public sealed class VerdictCard : Observable
     private static string? Protocol(string? protocol, string? cipher) =>
         protocol is null ? null : cipher is null ? protocol : $"{protocol} · {cipher}";
 
-    private void Render(CardData d, bool live, string? pastInspection, BrowserPathResult? path = null, CertViewerReading? viewer = null)
+    private void Render(CardData d, bool live, string? pastInspection, BrowserPathResult? path = null, CertViewerReading? viewer = null, string? directAddress = null)
     {
         var ownPath = path?.Match == BrowserPathMatch.Different;
         var treatment = PathTreatment.Of(d.Verdict, d.EgressKind);
@@ -120,9 +137,17 @@ public sealed class VerdictCard : Observable
             Headline = "Browser uses its own path";
             Status = StatusKind.Neutral;
         }
+        if (directAddress is not null) Subline = $"{_browserName}'s own path, checked at {directAddress}. {Subline}";
+        if (viewer is not null && !viewer.Matches(d.Fingerprint))
+        {
+            // The browser's own viewer outranks any connection CertWatch made.
+            Subline = $"Browser: {viewer.IssuerLabel ?? "issuer not read"} · CertWatch's connection: {Headline}";
+            Headline = "Browser sees a different certificate";
+            Status = StatusKind.Neutral;
+        }
         Fingerprint = d.Fingerprint ?? "";
         Chain = d.Chain;
-        BuildPath(d, ownPath);
+        BuildPath(d, ownPath && directAddress is null);
         BuildFacts(d);
         BuildNotes(d, pastInspection, ownPath ? path : null, viewer);
     }

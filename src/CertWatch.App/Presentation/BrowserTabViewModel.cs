@@ -20,6 +20,7 @@ public sealed class BrowserTabViewModel : Observable
     private SiteCheck? _lastLive;
     private BrowserPathResult _lastPath = BrowserPathResult.Unknown;
     private CertViewerReading? _viewer;
+    private DirectPathResult? _direct;
     // A viewer reading describes what the user looked at; after this long it's stale.
     private static readonly TimeSpan ViewerReadingLifetime = TimeSpan.FromMinutes(15);
 
@@ -66,8 +67,11 @@ public sealed class BrowserTabViewModel : Observable
     public bool OwnPathDetected
     {
         get => _ownPath;
-        private set { if (Set(ref _ownPath, value)) OnChanged(nameof(ViewerButtonText)); }
+        private set { if (Set(ref _ownPath, value)) OnChanged(nameof(OfferViewer)); }
     }
+
+    /// <summary>The card offers the certificate viewer: always for an enterprise browser, otherwise when its own path was detected.</summary>
+    public bool OfferViewer => Browser.Enterprise || _ownPath;
 
     private bool _viewerEnabled;
     /// <summary>Mirrors the saved setting; the shell sets it on every tab.</summary>
@@ -162,6 +166,7 @@ public sealed class BrowserTabViewModel : Observable
         CardNote = "";
         Status = StatusKind.Neutral;
         OwnPathDetected = false;
+        _direct = null;
         TabStatus = "No HTTPS page";
         Card.ShowWaiting();
     }
@@ -174,6 +179,7 @@ public sealed class BrowserTabViewModel : Observable
         CardNote = "";
         Status = StatusKind.Neutral;
         OwnPathDetected = false;
+        _direct = null;
         TabStatus = "Not running";
         Card.ShowWaiting($"Start {Browser.DisplayName} and CertWatch follows its active tab.", $"{Browser.DisplayName} isn't running");
     }
@@ -183,6 +189,7 @@ public sealed class BrowserTabViewModel : Observable
         _liveSite = site;
         _lastLive = null;
         _lastPath = BrowserPathResult.Unknown;
+        _direct = null;
         OwnPathDetected = false;
         CardNote = "";
         SelectRow(Sites.FirstOrDefault(r => r.Endpoint == site));
@@ -197,8 +204,10 @@ public sealed class BrowserTabViewModel : Observable
         _lastLive = check;
         _lastPath = path ?? BrowserPathResult.Unknown;
         OwnPathDetected = _lastPath.Match == BrowserPathMatch.Different;
+        if (_direct is { Check: { } d } && d.Probe.Endpoint != check.Probe.Endpoint) _direct = null;
         var row = UpdateRow(check);
         row.SetBrowserPath(_lastPath.Match);
+        MarkRow(row, check);
         if (_selectedSite is null) SelectRow(row);
         Status = row.Status;
         TabStatus = $"{check.Probe.Endpoint} · {row.Verdict}";
@@ -230,11 +239,41 @@ public sealed class BrowserTabViewModel : Observable
     {
         CardNote = "";
         var viewer = ViewerFor(check);
-        var hint = _ownPath && _viewerEnabled && viewer is null
+        var hint = OfferViewer && _viewerEnabled && viewer is null
             ? $"To see {Name}'s own certificate, open its certificate viewer for {check.Probe.Endpoint.Host} (padlock → certificate). CertWatch reads it when it opens (read-only) and compares it here."
             : null;
-        Card.ShowLive(check, PastInspection(Sites.FirstOrDefault(r => r.Endpoint == check.Probe.Endpoint)), _lastPath, viewer, hint);
+        Card.ShowLive(check, PastInspection(Sites.FirstOrDefault(r => r.Endpoint == check.Probe.Endpoint)), _lastPath, viewer, hint, _direct);
     }
+
+    /// <summary>The live site's row shows the browser's own result when CertWatch has one: its viewer first, then its own path.</summary>
+    private void MarkRow(SiteRow row, SiteCheck check)
+    {
+        if (ViewerFor(check) is { } v && !v.Matches(_direct is { Outcome: DirectPathOutcome.Found, Check: { } own } ? own.Observation.LeafFingerprint : check.Observation.LeafFingerprint))
+            row.SetBrowserVerdict(StatusKind.Neutral, "Different cert");
+        else if (_direct is { Outcome: DirectPathOutcome.Found, Check: { } d })
+        {
+            var t = PathTreatment.Of(d.Classification.Verdict, d.Egress?.Kind.ToString());
+            row.SetBrowserVerdict(Presentation.Status.Of(t, d.Classification.Verdict), VerdictStyle.Short(t, d.Classification.Verdict));
+        }
+        Status = row.Status;
+        TabStatus = $"{check.Probe.Endpoint} · {row.Verdict}";
+    }
+
+    /// <summary>The search for an enterprise browser's own path to the live site ended.</summary>
+    public void ShowDirectPath(SiteEndpoint site, DirectPathResult result)
+    {
+        if (_liveSite != site || _lastLive is not { } live || live.Probe.Endpoint != site) return;
+        _direct = result;
+        if (Sites.FirstOrDefault(r => r.Endpoint == site) is { } row)
+        {
+            row.ApplyLiveCheck(live.Observation);
+            MarkRow(row, live);
+        }
+        if (ShowingLive && (_selectedSite is null || _selectedSite.Endpoint == site)) ShowLiveCard(live);
+    }
+
+    /// <summary>The live result no longer goes through the tunnel: drop any own-path result.</summary>
+    public void ClearDirectPath() => _direct = null;
 
     private CertViewerReading? ViewerFor(SiteCheck check) =>
         _viewer is { } v && v.Host == check.Probe.Endpoint.Host && DateTimeOffset.Now - v.ReadAt < ViewerReadingLifetime ? v : null;
@@ -243,9 +282,9 @@ public sealed class BrowserTabViewModel : Observable
     public void SetViewerReading(CertViewerReading reading)
     {
         _viewer = reading;
-        if (_lastLive is { } live && live.Probe.Endpoint.Host == reading.Host && ShowingLive
-            && (_selectedSite is null || _selectedSite.Endpoint == live.Probe.Endpoint))
-            ShowLiveCard(live);
+        if (_lastLive is not { } live || live.Probe.Endpoint.Host != reading.Host) return;
+        if (Sites.FirstOrDefault(r => r.Endpoint == live.Probe.Endpoint) is { } row) MarkRow(row, live);
+        if (ShowingLive && (_selectedSite is null || _selectedSite.Endpoint == live.Probe.Endpoint)) ShowLiveCard(live);
     }
 
     private void BackToLive()

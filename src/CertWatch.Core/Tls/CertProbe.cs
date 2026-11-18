@@ -10,6 +10,12 @@ namespace CertWatch.Core.Tls;
 public interface ICertProbe
 {
     Task<ProbeResult> ProbeAsync(SiteEndpoint endpoint, CancellationToken ct = default);
+
+    /// <summary>
+    /// The same handshake (SNI = the site), but to one given address, with no proxy: used to follow the
+    /// address a browser is actually connected to, when CertWatch's own lookup would go elsewhere.
+    /// </summary>
+    Task<ProbeResult> ProbeAtAsync(SiteEndpoint endpoint, IPAddress address, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -28,7 +34,11 @@ public sealed class CertProbe : ICertProbe
         _proxy = proxy ?? HttpClient.DefaultProxy;
     }
 
-    public async Task<ProbeResult> ProbeAsync(SiteEndpoint endpoint, CancellationToken ct = default)
+    public Task<ProbeResult> ProbeAsync(SiteEndpoint endpoint, CancellationToken ct = default) => ProbeCoreAsync(endpoint, null, ct);
+
+    public Task<ProbeResult> ProbeAtAsync(SiteEndpoint endpoint, IPAddress address, CancellationToken ct = default) => ProbeCoreAsync(endpoint, address, ct);
+
+    private async Task<ProbeResult> ProbeCoreAsync(SiteEndpoint endpoint, IPAddress? address, CancellationToken ct)
     {
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeoutCts.CancelAfter(_timeout);
@@ -37,13 +47,18 @@ public sealed class CertProbe : ICertProbe
         var chain = new List<X509Certificate2>();
         var policyErrors = SslPolicyErrors.None;
         var clientCertRequested = false;
-        var proxyUri = ResolveProxy(endpoint);
+        // A fixed address is the browser's own connection target: connect to it directly, never via a proxy.
+        var proxyUri = address is null ? ResolveProxy(endpoint) : null;
         IPAddress? remote = null;
 
         try
         {
             using var tcp = new TcpClient();
-            if (proxyUri is null)
+            if (address is not null)
+            {
+                await tcp.ConnectAsync(address, endpoint.Port, token);
+            }
+            else if (proxyUri is null)
             {
                 await tcp.ConnectAsync(endpoint.Host, endpoint.Port, token);
             }

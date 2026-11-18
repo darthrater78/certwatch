@@ -91,6 +91,13 @@ public sealed class SiteRow(SiteEndpoint endpoint) : Observable
         Verdict = "Own path";
     }
 
+    /// <summary>Shows the browser's own result (its own path, or its certificate viewer) instead of CertWatch's connection.</summary>
+    public void SetBrowserVerdict(StatusKind status, string verdict)
+    {
+        Status = status;
+        Verdict = verdict;
+    }
+
     /// <summary>A re-check or change for this site just came in.</summary>
     public void Update(Observation o)
     {
@@ -98,6 +105,9 @@ public sealed class SiteRow(SiteEndpoint endpoint) : Observable
         if (isChange || (ChangeCount == 0 && o.Change == ChangeKind.FirstSeen)) Apply(o, ChangeCount + (isChange ? 1 : 0), o.Timestamp);
         else ApplyLive(o);
     }
+
+    /// <summary>Resets the row to CertWatch's live result before the browser's own result is marked again.</summary>
+    public void ApplyLiveCheck(Observation o) => ApplyLive(o);
 
     private void ApplyLive(Observation o)
     {

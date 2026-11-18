@@ -115,7 +115,11 @@ internal sealed class BrowserSession : IDisposable
 
     private void OnChecked(SiteCheck check)
     {
-        var path = ComparePath(check);
+        // A different path only matters for an enterprise browser (Island) whose check came back inspected:
+        // the steering rule for apps outside it can catch CertWatch while the browser goes out on its own.
+        // In any other browser, CertWatch's path is the browser's and its result stands.
+        var inspected = Browser.Enterprise && check.Classification.Verdict == Verdict.Inspected;
+        var path = inspected ? ComparePath(check) : BrowserPathResult.Unknown;
         View.ShowCheck(check, path);
         var c = check.Classification;
         LogService.Info(Browser.Id, $"{check.Probe.Endpoint}: {c.Verdict}{(c.Vendor is null ? "" : $" ({c.Vendor})")}, egress {check.Egress?.InterfaceLabel ?? "unknown"} {check.Egress?.Kind}, change {check.Observation.Change}{(c.Verdict == Verdict.Error ? $": {c.Reason}" : "")}");
@@ -125,7 +129,7 @@ internal sealed class BrowserSession : IDisposable
         Checked?.Invoke(this, check, path);
 
         // An enterprise browser can go out on its own path while CertWatch is steered: follow its address too.
-        if (Browser.Enterprise && check.Egress?.Kind == EgressKind.Tunnel) StartDirectSearch(check);
+        if (Browser.Enterprise && inspected) StartDirectSearch(check);
         else
         {
             CancelDirectSearch();

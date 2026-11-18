@@ -26,6 +26,8 @@ internal sealed class AppSettings
     public bool KeepOnTop { get; set; }
     /// <summary>Read the certificate viewer the user opens in a monitored browser, and compare it with CertWatch's own connection. Off by default.</summary>
     public bool ReadCertificateViewer { get; set; }
+    /// <summary>Docked side panel lists every site, not just the page in focus. Off by default.</summary>
+    public bool DockedShowAllSites { get; set; }
 
     private static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CertWatch", "settings.json");

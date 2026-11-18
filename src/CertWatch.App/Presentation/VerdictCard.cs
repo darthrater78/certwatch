@@ -87,10 +87,7 @@ public sealed class VerdictCard : Observable
         else
         {
             Render(FromCheck(check), live: true, pastInspection, path, viewer);
-            if (direct?.Outcome == DirectPathOutcome.Captured)
-                Notes.Add(new CardNote($"CertWatch also checked {direct.Address}, the address {_browserName} is connected to for this site, and was inspected there too: the agent catches CertWatch's traffic whatever the address, so the browser's own result can't be seen this way. Compare with the browser's certificate viewer.", StatusKind.Neutral));
-            else if (direct?.Outcome == DirectPathOutcome.NotFound)
-                Notes.Add(new CardNote($"This is CertWatch's own connection. None of {_browserName}'s direct connections ({direct.AddressesTried} tried) served this site, so its own path wasn't found; if it uses its own gateway, compare with its certificate viewer.", StatusKind.Neutral));
+            // Captured / not found are logged; the card keeps one note (below) rather than stacking explanations.
         }
         if (viewerHint is not null) Notes.Add(new CardNote(viewerHint, StatusKind.Neutral));
     }
@@ -200,8 +197,8 @@ public sealed class VerdictCard : Observable
         Notes.Clear();
         if (ownPath is not null)
         {
-            var via = ownPath.BrowserInterfaces.Count == 0 ? "" : $"; its connections leave via {string.Join(", ", ownPath.BrowserInterfaces)}";
-            Notes.Add(new CardNote($"{_browserName} isn't connected to {d.RemoteIp}, the address CertWatch reached through {d.EgressInterface ?? "the tunnel"}{via}. The details below are CertWatch's own connection, not the browser's.", StatusKind.Neutral));
+            var via = ownPath.BrowserInterfaces.Count == 0 ? "" : $" via {string.Join(", ", ownPath.BrowserInterfaces)}";
+            Notes.Add(new CardNote($"{_browserName} goes out on its own path{via}. The inspection below is CertWatch's own connection, caught by the steering rule for apps outside {_browserName}.", StatusKind.Neutral));
         }
         if (viewer is not null)
         {

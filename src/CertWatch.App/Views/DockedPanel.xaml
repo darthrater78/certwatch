@@ -129,10 +129,15 @@
             <TextBlock Text="{Binding StatusMessage}" Foreground="{DynamicResource OnSteeredTint}" FontWeight="SemiBold" FontSize="12" TextWrapping="Wrap"/>
         </Border>
 
-        <TextBlock Grid.Row="2" Text="Sites" Style="{StaticResource SectionTitle}" Margin="0,12,0,6" HorizontalAlignment="Left"/>
+        <!-- The page in focus only; "Show all sites" lists every site seen in this browser -->
+        <DockPanel Grid.Row="2" Margin="0,12,0,6" LastChildFill="False">
+            <TextBlock Text="Sites" Style="{StaticResource SectionTitle}"/>
+            <CheckBox DockPanel.Dock="Right" Content="Show all sites" IsChecked="{Binding ShowAllSitesDocked}" FontSize="12"
+                      ToolTip="List every site seen in this browser, not just the page in focus"/>
+        </DockPanel>
         <!-- Most recent first; click one to show its saved result on the card -->
         <Border Grid.Row="3" Style="{StaticResource Card}">
-            <DataGrid ItemsSource="{Binding SitesView}" SelectedItem="{Binding SelectedSite, Mode=TwoWay}"
+            <DataGrid ItemsSource="{Binding DockedSitesView}" SelectedItem="{Binding SelectedSite, Mode=TwoWay}"
                       HeadersVisibility="None" AutomationProperties.Name="Sites seen in this browser">
                 <DataGrid.Columns>
                     <DataGridTextColumn Binding="{Binding Host}" Width="*" FontWeight="SemiBold"/>

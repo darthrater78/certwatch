@@ -141,6 +141,7 @@ public partial class MainWindow : Window
         session.Checked -= OnChecked;
         session.DirectPathChecked -= OnDirectPathChecked;
         session.View.ViewerToggleRequested -= SetViewerReading;
+        session.View.ShowAllSitesDockedChanged -= SetDockedShowAll;
         // Stopping the follower waits for its poll to finish; keep that wait off the UI thread.
         _ = Task.Run(session.Dispose);
         _sessions.Remove(session);
@@ -172,6 +173,8 @@ public partial class MainWindow : Window
         session.DirectPathChecked += OnDirectPathChecked;
         session.View.ViewerReadingEnabled = _settings.ReadCertificateViewer;
         session.View.ViewerToggleRequested += SetViewerReading;
+        session.View.ShowAllSitesDocked = _settings.DockedShowAllSites;
+        session.View.ShowAllSitesDockedChanged += SetDockedShowAll;
         _sessions.Add(session);
         _shell.Tabs.Add(session.View);
         _shell.SelectedTab ??= session.View;
@@ -189,6 +192,12 @@ public partial class MainWindow : Window
         _dock.Attach();
         _dock.ForegroundChanged += OnForegroundChanged;
         _dock.HintChanged += hint => _shell.DockHint = hint ?? "";
+        _dock.PlacementLoopStopped += () =>
+        {
+            // Back to the floating window and saved that way, so a restart doesn't dock into the same loop.
+            LogService.Info("app", $"Docking stopped: the window kept re-placing itself ({_settings.Dock}, {_settings.DockAnchor}). Floating instead.");
+            SetDock(DockPosition.Floating, _settings.DockAnchor);
+        };
         _dock.KeepOnTop = _settings.KeepOnTop;
         _settings.Dock = DockLayout.Validate(_settings.Dock);
         _settings.DockAnchor = DockLayout.Validate(_settings.DockAnchor);
@@ -259,6 +268,15 @@ public partial class MainWindow : Window
             return;
         }
         if (_dock is not null && _shell.SelectedTab == session.View && DockController.IsDockable(window)) _dock.Target = window;
+    }
+
+    /// <summary>"Show all sites" in the docked panel: saved, and the same on every tab.</summary>
+    private void SetDockedShowAll(bool on)
+    {
+        if (_settings.DockedShowAllSites == on) return;
+        _settings.DockedShowAllSites = on;
+        _settings.Save();
+        foreach (var tab in _shell.Tabs) tab.ShowAllSitesDocked = on;
     }
 
     /// <summary>Offered on the card when a browser has its own path; saved, and applied to every tab.</summary>
@@ -376,7 +394,7 @@ public partial class MainWindow : Window
             _tray.SetState(StatusKind.Neutral, $"CertWatch · {browser} · {site}: browser uses its own path");
             return;
         }
-        if (session.Browser.Enterprise && check.Egress?.Kind == EgressKind.Tunnel)
+        if (session.Browser.Enterprise && check.Classification.Verdict == Verdict.Inspected)
         {
             // Wait for the browser's own path (OnDirectPathChecked) before colouring the tray or popping up.
             _tray.SetState(StatusKind.Neutral, $"CertWatch · {browser} · {site}: checking the browser's own path");

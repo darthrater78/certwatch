@@ -35,6 +35,12 @@ public sealed class BrowserTabViewModel : Observable
         SitesView.LiveSortingProperties.Add(nameof(SiteRow.LastSeen));
         SitesView.Filter = o => _filter.Length == 0 || ((SiteRow)o).Host.Contains(_filter, StringComparison.OrdinalIgnoreCase);
 
+        DockedSitesView = new ListCollectionView(Sites);
+        DockedSitesView.SortDescriptions.Add(new SortDescription(nameof(SiteRow.LastSeen), ListSortDirection.Descending));
+        DockedSitesView.IsLiveSorting = true;
+        DockedSitesView.LiveSortingProperties.Add(nameof(SiteRow.LastSeen));
+        DockedSitesView.Filter = o => _showAllDocked || ((SiteRow)o).Endpoint == _liveSite;
+
         RecheckCommand = new RelayCommand(() => RecheckRequested?.Invoke());
         CopyFingerprintCommand = new RelayCommand(() => { if (Card.Fingerprint.Length > 0) System.Windows.Clipboard.SetText(Card.Fingerprint); });
         ExportRootCommand = new RelayCommand(() => StatusMessage = RootExporter.Export(Card.Chain, Card.Site) ?? StatusMessage);
@@ -71,7 +77,42 @@ public sealed class BrowserTabViewModel : Observable
     }
 
     /// <summary>The card offers the certificate viewer: always for an enterprise browser, otherwise when its own path was detected.</summary>
-    public bool OfferViewer => Browser.Enterprise || _ownPath;
+    public bool OfferViewer => _ownPath || (Browser.Enterprise && _liveInspected);
+
+    private bool _liveInspected;
+    /// <summary>CertWatch's own live check was inspected: the only case where its result can misstate an enterprise browser's.</summary>
+    private bool LiveInspected
+    {
+        get => _liveInspected;
+        set { if (_liveInspected != value) { _liveInspected = value; OnChanged(nameof(OfferViewer)); } }
+    }
+
+    // ---- docked Sites list: the page in focus only, unless "Show all sites" is ticked ----
+
+    /// <summary>Same rows as <see cref="SitesView"/>, filtered for the docked panel.</summary>
+    public ListCollectionView DockedSitesView { get; }
+
+    private bool _showAllDocked;
+    public bool ShowAllSitesDocked
+    {
+        get => _showAllDocked;
+        set
+        {
+            if (!Set(ref _showAllDocked, value)) return;
+            DockedSitesView.Refresh();
+            ShowAllSitesDockedChanged?.Invoke(value);
+        }
+    }
+    /// <summary>Raised when the viewer ticks or clears "Show all sites"; the shell saves it and applies it to every tab.</summary>
+    public event Action<bool>? ShowAllSitesDockedChanged;
+
+    private SiteEndpoint? _dockedFilterSite;
+    private void RefreshDockedFilter()
+    {
+        if (_dockedFilterSite == _liveSite) return;
+        _dockedFilterSite = _liveSite;
+        if (!_showAllDocked) DockedSitesView.Refresh();
+    }
 
     private bool _viewerEnabled;
     /// <summary>Mirrors the saved setting; the shell sets it on every tab.</summary>
@@ -167,6 +208,9 @@ public sealed class BrowserTabViewModel : Observable
         Status = StatusKind.Neutral;
         OwnPathDetected = false;
         _direct = null;
+        LiveInspected = false;
+        _liveSite = null;
+        RefreshDockedFilter();
         TabStatus = "No HTTPS page";
         Card.ShowWaiting();
     }
@@ -180,6 +224,9 @@ public sealed class BrowserTabViewModel : Observable
         Status = StatusKind.Neutral;
         OwnPathDetected = false;
         _direct = null;
+        LiveInspected = false;
+        _liveSite = null;
+        RefreshDockedFilter();
         TabStatus = "Not running";
         Card.ShowWaiting($"Start {Browser.DisplayName} and CertWatch follows its active tab.", $"{Browser.DisplayName} isn't running");
     }
@@ -191,7 +238,9 @@ public sealed class BrowserTabViewModel : Observable
         _lastPath = BrowserPathResult.Unknown;
         _direct = null;
         OwnPathDetected = false;
+        LiveInspected = false;
         CardNote = "";
+        RefreshDockedFilter();
         SelectRow(Sites.FirstOrDefault(r => r.Endpoint == site));
         TabStatus = $"{site} · checking";
         Card.ShowChecking(site);
@@ -204,9 +253,10 @@ public sealed class BrowserTabViewModel : Observable
         _lastLive = check;
         _lastPath = path ?? BrowserPathResult.Unknown;
         OwnPathDetected = _lastPath.Match == BrowserPathMatch.Different;
+        LiveInspected = check.Classification.Verdict == Core.Trust.Verdict.Inspected;
         if (_direct is { Check: { } d } && d.Probe.Endpoint != check.Probe.Endpoint) _direct = null;
         var row = UpdateRow(check);
-        row.SetBrowserPath(_lastPath.Match);
+        RefreshDockedFilter();
         MarkRow(row, check);
         if (_selectedSite is null) SelectRow(row);
         Status = row.Status;
@@ -240,7 +290,7 @@ public sealed class BrowserTabViewModel : Observable
         CardNote = "";
         var viewer = ViewerFor(check);
         var hint = OfferViewer && _viewerEnabled && viewer is null
-            ? $"To see {Name}'s own certificate, open its certificate viewer for {check.Probe.Endpoint.Host} (padlock → certificate). CertWatch reads it when it opens (read-only) and compares it here."
+            ? $"Open {Name}'s certificate viewer for {check.Probe.Endpoint.Host} to compare."
             : null;
         Card.ShowLive(check, PastInspection(Sites.FirstOrDefault(r => r.Endpoint == check.Probe.Endpoint)), _lastPath, viewer, hint, _direct);
     }
@@ -248,6 +298,7 @@ public sealed class BrowserTabViewModel : Observable
     /// <summary>The live site's row shows the browser's own result when CertWatch has one: its viewer first, then its own path.</summary>
     private void MarkRow(SiteRow row, SiteCheck check)
     {
+        row.SetBrowserPath(_lastPath.Match);
         if (ViewerFor(check) is { } v && !v.Matches(_direct is { Outcome: DirectPathOutcome.Found, Check: { } own } ? own.Observation.LeafFingerprint : check.Observation.LeafFingerprint))
             row.SetBrowserVerdict(StatusKind.Neutral, "Different cert");
         else if (_direct is { Outcome: DirectPathOutcome.Found, Check: { } d })

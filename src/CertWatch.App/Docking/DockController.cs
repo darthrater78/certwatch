@@ -44,6 +44,13 @@ internal sealed unsafe class DockController : IDisposable
     private bool _keepOnTop;
     private bool _fullscreenApp;
     private bool _suspended;
+    // Loop protection (a crash came from an app-bar move/notify feedback loop flooding WPF's renderer).
+    private bool _placing;
+    private bool _placePending;
+    private PixelRect? _lastAppBar;
+    private long _burstStart;
+    private int _burstCount;
+    private const int MaxPlacementsPerSecond = 20; // app-bar repositions only; following a dragged browser is not counted
     private string? _hint;
 
     /// <param name="window">CertWatch's main window, already shown or at least with a handle.</param>
@@ -54,7 +61,7 @@ internal sealed unsafe class DockController : IDisposable
         _fallbackTarget = fallbackTarget;
         _appBarMessage = DockNative.RegisterWindowMessage("CertWatch.AppBar");
         _watchdog = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => OnWatchdog(), window.Dispatcher);
-        _window.DpiChanged += (_, _) => Place();
+        _window.DpiChanged += (_, _) => SchedulePlace();
         _instance = this;
     }
 
@@ -77,6 +84,9 @@ internal sealed unsafe class DockController : IDisposable
         }
     }
     public event Action<string?>? HintChanged;
+
+    /// <summary>Placement kept re-triggering itself; docking was stopped. The shell floats the window.</summary>
+    public event Action? PlacementLoopStopped;
 
     public bool KeepOnTop
     {
@@ -184,7 +194,8 @@ internal sealed unsafe class DockController : IDisposable
     /// <summary>Re-applies the placement for the current mode (after a theme or DPI change, a display change, a new target).</summary>
     public void Place()
     {
-        if (_hwnd == IntPtr.Zero || Position == DockPosition.Floating || _suspended) return;
+        if (_hwnd == IntPtr.Zero || Position == DockPosition.Floating || _suspended || _placing) return;
+        _placing = true;
         try
         {
             if (Anchor == DockAnchor.ScreenEdge) PlaceAppBar();
@@ -194,6 +205,33 @@ internal sealed unsafe class DockController : IDisposable
         {
             // A window vanished mid-call; the next event or the watchdog places it again.
         }
+        finally
+        {
+            _placing = false;
+        }
+    }
+
+    /// <summary>Coalesces bursts (app-bar notifications, DPI and display changes) into one placement.</summary>
+    private void SchedulePlace()
+    {
+        if (_placePending) return;
+        _placePending = true;
+        _window.Dispatcher.BeginInvoke(() =>
+        {
+            _placePending = false;
+            Place();
+        }, DispatcherPriority.Background);
+    }
+
+    private bool TooManyPlacements()
+    {
+        var now = Environment.TickCount64;
+        if (now - _burstStart > 1000)
+        {
+            _burstStart = now;
+            _burstCount = 0;
+        }
+        return ++_burstCount > MaxPlacementsPerSecond;
     }
 
     private void PlaceBesideBrowser()
@@ -240,10 +278,25 @@ internal sealed unsafe class DockController : IDisposable
         data.rc = DockNative.RECT.From(DockLayout.Edge(monitor.Monitor, Position, side, top));
         DockNative.SHAppBarMessage(DockNative.ABM_QUERYPOS, ref data);
         var bounds = DockLayout.Refit(data.rc.ToPixelRect(), Position, side, top);
+        if (bounds.IsEmpty || bounds.Width > 16384 || bounds.Height > 16384) return;
+        _edgeMonitorSource = _hwnd;
+        // Already reserved and already there: setting it again would notify every app bar (us included) and loop.
+        if (bounds == _lastAppBar && CurrentBounds() == bounds) return;
+        // A real app bar moves a few times at most when the taskbar or a display changes. Many moves a
+        // second means the move/notify cycle is feeding itself: stop docking rather than spin.
+        if (TooManyPlacements())
+        {
+            _window.Dispatcher.BeginInvoke(() =>
+            {
+                Apply(DockPosition.Floating, Anchor);
+                PlacementLoopStopped?.Invoke();
+            });
+            return;
+        }
         data.rc = DockNative.RECT.From(bounds);
         DockNative.SHAppBarMessage(DockNative.ABM_SETPOS, ref data);
+        _lastAppBar = bounds;
         Move(bounds);
-        _edgeMonitorSource = _hwnd;
     }
 
     private (int Side, int Top) PixelSizes()
@@ -253,8 +306,14 @@ internal sealed unsafe class DockController : IDisposable
         return ((int)Math.Round(SideWidth * scale), (int)Math.Round(TopHeight * scale));
     }
 
-    private void Move(PixelRect r) =>
+    /// <summary>Moves CertWatch's window, unless it's already exactly there (a no-op move still sends position messages).</summary>
+    private void Move(PixelRect r)
+    {
+        if (r.IsEmpty || CurrentBounds() == r) return;
         DockNative.SetWindowPos(_hwnd, IntPtr.Zero, r.Left, r.Top, r.Width, r.Height, DockNative.SWP_NOZORDER | DockNative.SWP_NOACTIVATE);
+    }
+
+    private PixelRect? CurrentBounds() => DockNative.GetWindowRect(_hwnd, out var r) ? r.ToPixelRect() : null;
 
     private IntPtr ValidTarget()
     {
@@ -361,6 +420,7 @@ internal sealed unsafe class DockController : IDisposable
         var data = NewAppBarData();
         DockNative.SHAppBarMessage(DockNative.ABM_REMOVE, ref data);
         _appBarRegistered = false;
+        _lastAppBar = null;
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -369,8 +429,8 @@ internal sealed unsafe class DockController : IDisposable
         {
             switch ((int)wParam)
             {
-                case DockNative.ABN_POSCHANGED: // the taskbar or another app bar moved
-                    Place();
+                case DockNative.ABN_POSCHANGED: // the taskbar or another app bar moved (also sent after our own moves)
+                    SchedulePlace();
                     break;
                 case DockNative.ABN_FULLSCREENAPP:
                     _fullscreenApp = lParam != IntPtr.Zero;
@@ -386,7 +446,7 @@ internal sealed unsafe class DockController : IDisposable
         }
         else if (msg == WM_DISPLAYCHANGE)
         {
-            _window.Dispatcher.BeginInvoke(Place, DispatcherPriority.Background);
+            SchedulePlace();
         }
         return IntPtr.Zero;
     }

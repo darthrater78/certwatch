@@ -128,8 +128,8 @@ folder, Copy all and Clear log.
 **Dock** (in the header) keeps CertWatch beside the browser instead of in its own window:
 
 - **Right of the browser** or **Left of the browser**: a 380px panel with the card, stacked for the
-  narrow width, and the sites that browser visited (most recent first; click one to show its saved
-  result).
+  narrow width, and under **Sites** the page in focus. Tick **Show all sites** to list every site
+  that browser visited (most recent first; click one to show its saved result).
 - **Above the browser**: a 64px strip with the status tile, verdict, path and as many facts as fit.
 - **Floating window**: the full window, back where you left it.
 
@@ -207,7 +207,12 @@ through its own path while other apps on the PC, CertWatch included, go through 
 client. CertWatch's connection can then be inspected while the browser's isn't, or the other way
 round.
 
-After each check, CertWatch reads Windows' TCP connection table (what `netstat -ano` shows) to see
+This only applies to **enterprise browsers (Island)**, and only when CertWatch's own connection was
+**inspected**: then CertWatch may have been caught by the steering rule for apps outside the
+browser, and its result can misstate the browser's. In any other browser, CertWatch takes the same
+path as the browser and its result stands; a result that isn't inspected is shown as it is.
+
+After an inspected check, CertWatch reads Windows' TCP connection table (what `netstat -ano` shows) to see
 whether the browser's processes are connected to the address CertWatch reached. ZTNA clients give
 each site its own tunnel address, so when CertWatch's check went through the tunnel and the browser
 has connections on that port but none to that address, the browser is on its own path. The card
@@ -220,7 +225,7 @@ over UDP and isn't in the TCP table; those keep the normal verdict.
 **Enterprise browsers (Island) going out directly.** An enterprise browser can send a site straight
 out while CertWatch's own connection is caught by the device agent's web gateway steering, and both
 can still hold a connection to the site's tunnel address, so the check above can't tell them apart.
-For an enterprise browser, whenever CertWatch's own check went through the tunnel, CertWatch also
+For an enterprise browser, whenever CertWatch's own check was inspected, CertWatch also
 follows the browser: it takes the browser's port-443 connections that leave by the normal network
 (not the tunnel), at most 8, and makes its usual read-only handshake to each address with the site's
 name. The address whose certificate is issued for that site is the browser's own path, and the card
@@ -230,7 +235,7 @@ served the site last time while it still does. If CertWatch's handshake to the b
 inspected too (the agent catches all of CertWatch's traffic), or no address serves the site, the card
 says so and keeps CertWatch's own result. Tray colour and pop-ups follow the browser's own result.
 
-When it detects its own path, and always on an enterprise browser's card, the card offers **Compare with the browser's certificate viewer**.
+When it detects its own path, and on an enterprise browser's card whose result is inspected, the card offers **Compare with the browser's certificate viewer**.
 Turn it on, then open the browser's certificate viewer for the site (padlock → certificate).
 CertWatch reads the viewer's issuer and SHA-256 fingerprint through UI Automation, the same
 read-only way it reads the address bar, and the card says whether the browser sees the same
@@ -304,8 +309,8 @@ How CertWatch is built with regard to security, in statements you can check agai
     and it names the sites you visit, so it's off by default; **Clear log** and **Clear all**
     delete these files. Without it, the log lives only in memory (last 5,000 entries).
 - **Network exposure.** CertWatch listens on nothing. Outbound, it makes one TLS handshake per site
-  you visit, through the system proxy when one is set. For an enterprise browser whose check went
-  through the ZTNA tunnel, it also makes the same handshake to up to 8 addresses the browser is
+  you visit, through the system proxy when one is set. For an enterprise browser whose check came
+  back inspected, it also makes the same handshake to up to 8 addresses the browser is
   already connected to (directly, no proxy), so the site's name is sent as SNI to those servers,
   some of which won't host it; re-checks use only the address that served the site. It never starts
   or controls a browser.

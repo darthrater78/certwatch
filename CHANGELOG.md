@@ -8,19 +8,19 @@ All notable changes to CertWatch. Versions are the UTC date of the release.
 
 - **Dock** in the header: keep CertWatch right or left of the browser (a 380px panel) or above it (a
   64px strip), docked to the browser window (moves with it) or to the screen edge (reserves space,
-  so maximised windows fit around it). **Follow whichever browser is active** switches to the tab of
+  so maximised windows fit around it). Docked, **Sites** lists only the page in focus; tick **Show
+  all sites** for the rest. **Follow whichever browser is active** switches to the tab of
   the browser you click into, and **Keep on top** keeps the window above others. The choice is saved.
   Pop-ups are off while docked (still logged), since the verdict is already beside the browser.
-- **Own-path detection**: when CertWatch's check went through the ZTNA tunnel but the browser isn't
+- **Own-path detection**, for enterprise browsers (Island) with inspected results only: when CertWatch's check went through the ZTNA tunnel but the browser isn't
   connected to that address (an enterprise browser's own gateway, such as Island Secure Gateway),
   the card reads **Browser uses its own path** instead of presenting CertWatch's own result as the
   browser's, and the site's row shows **Own path**. It's read from Windows' TCP connection table;
   nothing is asked of the browser.
-- **Enterprise browsers' own path** (Island): when CertWatch's own check is steered through the
-  tunnel, it also checks the addresses the browser is connected to directly and shows the browser's
+- **Enterprise browsers' own path** (Island): when CertWatch's own check comes back inspected, it also checks the addresses the browser is connected to directly and shows the browser's
   own result (for example **Direct · not inspected**) with CertWatch's steered result as a note. Tray
   colour and pop-ups follow the browser's result.
-- **Compare with the browser's certificate viewer**, offered on enterprise-browser cards and when
+- **Compare with the browser's certificate viewer**, offered on inspected enterprise-browser cards and when
   the browser takes its own path (off by default): open the browser's certificate viewer and
   CertWatch reads its issuer and fingerprint (read-only). A different certificate turns the headline
   into **Browser sees a different certificate**.

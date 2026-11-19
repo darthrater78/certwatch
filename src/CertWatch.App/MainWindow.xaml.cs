@@ -192,17 +192,42 @@ public partial class MainWindow : Window
         _dock.Attach();
         _dock.ForegroundChanged += OnForegroundChanged;
         _dock.HintChanged += hint => _shell.DockHint = hint ?? "";
-        _dock.PlacementLoopStopped += () =>
+        _dock.PlacementLoopStopped += reason =>
         {
-            // Back to the floating window and saved that way, so a restart doesn't dock into the same loop.
-            LogService.Info("app", $"Docking stopped: the window kept re-placing itself ({_settings.Dock}, {_settings.DockAnchor}). Floating instead.");
-            SetDock(DockPosition.Floating, _settings.DockAnchor);
+            // The edge is already given back. Stay docked on the same side, attached to the browser (that
+            // never touches the desktop's work area), and save it so a restart doesn't go back to the edge.
+            LogService.Warn("app", $"Screen-edge docking stopped: {reason}. Docked to the browser instead; screen-edge docking is off until CertWatch restarts.");
+            SetDock(_settings.Dock, DockAnchor.Browser, ScreenEdgeStoppedNotice);
+        };
+        _dock.EdgeHeldChanged += held =>
+        {
+            if (_settings.ScreenEdgeHeld == held) return;
+            _settings.ScreenEdgeHeld = held;
+            _settings.Save();
         };
         _dock.KeepOnTop = _settings.KeepOnTop;
         _settings.Dock = DockLayout.Validate(_settings.Dock);
         _settings.DockAnchor = DockLayout.Validate(_settings.DockAnchor);
+        string? notice = null;
+        if (_settings.ScreenEdgeHeld)
+        {
+            // The last run still held the screen edge when it ended: it froze, crashed or lost power.
+            // Don't go straight back to the edge; the browser-attached dock leaves the desktop alone.
+            _settings.ScreenEdgeHeld = false;
+            if (_settings.Dock != DockPosition.Floating && _settings.DockAnchor == DockAnchor.ScreenEdge)
+            {
+                _settings.DockAnchor = DockAnchor.Browser;
+                notice = UncleanEdgeNotice;
+                LogService.Warn("app", "CertWatch didn't close cleanly while docked to the screen edge. Docked to the browser instead; choose the screen edge from Dock to use it again.");
+            }
+            _settings.Save();
+        }
         if (_settings.Dock != DockPosition.Floating) ApplyDock(_settings.Dock, _settings.DockAnchor);
+        _dock.Notice = notice;
     }
+
+    private const string ScreenEdgeStoppedNotice = "Screen-edge docking stopped because it kept re-placing itself, so CertWatch is docked to the browser. Restart CertWatch to use the screen edge again.";
+    private const string UncleanEdgeNotice = "CertWatch didn't close cleanly last time it held the screen edge, so it's docked to the browser. Choose the screen edge from Dock to use it again.";
 
     /// <summary>The browser window to dock beside for a session: its main window only, never a dialog or pop-up.</summary>
     private static IntPtr DockTargetFor(BrowserSession? session) =>
@@ -241,12 +266,14 @@ public partial class MainWindow : Window
         LogService.Info("app", position == DockPosition.Floating ? "Floating window" : $"Docked {position} ({anchor})");
     }
 
-    private void SetDock(DockPosition position, DockAnchor anchor)
+    /// <param name="notice">A note to keep on the docked layout; a dock change the user makes clears the previous one.</param>
+    private void SetDock(DockPosition position, DockAnchor anchor, string? notice = null)
     {
         _settings.Dock = position;
         _settings.DockAnchor = anchor;
         _settings.Save();
         ApplyDock(position, anchor);
+        if (_dock is not null) _dock.Notice = notice;
     }
 
     /// <summary>A window of another app took focus. If it's a monitored browser, follow it.</summary>
@@ -322,7 +349,8 @@ public partial class MainWindow : Window
         Position("_Above the browser", DockPosition.Top);
         menu.Items.Add(new Separator());
         Anchor("Docked to the _browser window (moves with it)", DockAnchor.Browser);
-        Anchor("Docked to the _screen edge (reserves space)", DockAnchor.ScreenEdge);
+        Anchor(_dock?.ScreenEdgeBlocked == true ? "Docked to the screen edge (off until CertWatch restarts)" : "Docked to the _screen edge (reserves space)", DockAnchor.ScreenEdge);
+        if (_dock?.ScreenEdgeBlocked == true && menu.Items[^1] is MenuItem edge) edge.IsEnabled = false;
         menu.Items.Add(new Separator());
         menu.Items.Add(Item("F_ollow whichever browser is active", _settings.FollowActiveBrowser, () =>
         {

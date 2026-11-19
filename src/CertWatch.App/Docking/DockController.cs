@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Threading;
+using CertWatch.App.Logging;
 using CertWatch.Core.Docking;
 
 namespace CertWatch.App.Docking;
@@ -44,14 +45,15 @@ internal sealed unsafe class DockController : IDisposable
     private bool _keepOnTop;
     private bool _fullscreenApp;
     private bool _suspended;
-    // Loop protection (a crash came from an app-bar move/notify feedback loop flooding WPF's renderer).
+    // Loop protection. A move/notify feedback loop once crashed WPF's renderer, and a slower one froze
+    // the whole computer: every edge reservation makes Windows resize all maximised windows.
+    private readonly AppBarGuard _guard = new();
     private bool _placing;
     private bool _placePending;
     private PixelRect? _lastAppBar;
-    private long _burstStart;
-    private int _burstCount;
-    private const int MaxPlacementsPerSecond = 20; // app-bar repositions only; following a dragged browser is not counted
+    private bool _releasingForCrash;
     private string? _hint;
+    private string? _notice;
 
     /// <param name="window">CertWatch's main window, already shown or at least with a handle.</param>
     /// <param name="fallbackTarget">The selected browser's last known window, used when no window has been seen yet or the followed one closed.</param>
@@ -75,18 +77,46 @@ internal sealed unsafe class DockController : IDisposable
     /// <summary>A short note for the docked layout (covering the browser, waiting for it); null when there is nothing to say.</summary>
     public string? Hint
     {
-        get => _hint;
+        get => _notice ?? _hint;
         private set
         {
             if (_hint == value) return;
             _hint = value;
-            HintChanged?.Invoke(value);
+            if (_notice is null) HintChanged?.Invoke(value);
         }
     }
     public event Action<string?>? HintChanged;
 
-    /// <summary>Placement kept re-triggering itself; docking was stopped. The shell floats the window.</summary>
-    public event Action? PlacementLoopStopped;
+    /// <summary>
+    /// A note that stays on the docked layout, above the placement hints, until the user changes the dock
+    /// (why screen-edge docking was stopped or skipped). Null clears it.
+    /// </summary>
+    public string? Notice
+    {
+        get => _notice;
+        set
+        {
+            if (_notice == value) return;
+            _notice = value;
+            HintChanged?.Invoke(Hint);
+        }
+    }
+
+    /// <summary>
+    /// Screen-edge placement kept re-triggering itself, so the edge was given back. The argument says why.
+    /// Screen-edge docking stays off until CertWatch restarts (<see cref="ScreenEdgeBlocked"/>).
+    /// </summary>
+    public event Action<string>? PlacementLoopStopped;
+
+    /// <summary>The loop guard tripped this session: <see cref="Apply"/> docks to the browser instead of the edge.</summary>
+    public bool ScreenEdgeBlocked => _guard.Tripped;
+
+    /// <summary>
+    /// CertWatch started (true) or stopped (false) holding a screen edge. The shell saves it, so a run that
+    /// ends without giving the edge back (a freeze, a power-off) doesn't dock to the edge again on the next start.
+    /// Not raised while crashing: that run must count as unclean.
+    /// </summary>
+    public event Action<bool>? EdgeHeldChanged;
 
     public bool KeepOnTop
     {
@@ -160,6 +190,9 @@ internal sealed unsafe class DockController : IDisposable
         _suspended = false;
         Position = DockLayout.Validate(position);
         Anchor = DockLayout.Validate(anchor);
+        if (Anchor == DockAnchor.ScreenEdge && _guard.Tripped) Anchor = DockAnchor.Browser;
+        // A deliberate (re)dock: fresh budget. Apply is never reached from window or app-bar notifications.
+        _guard.Restart();
         _fullscreenApp = false;
         ShowIfHiddenForMinimized();
 
@@ -223,17 +256,6 @@ internal sealed unsafe class DockController : IDisposable
         }, DispatcherPriority.Background);
     }
 
-    private bool TooManyPlacements()
-    {
-        var now = Environment.TickCount64;
-        if (now - _burstStart > 1000)
-        {
-            _burstStart = now;
-            _burstCount = 0;
-        }
-        return ++_burstCount > MaxPlacementsPerSecond;
-    }
-
     private void PlaceBesideBrowser()
     {
         var target = ValidTarget();
@@ -262,7 +284,7 @@ internal sealed unsafe class DockController : IDisposable
         ShowIfHiddenForMinimized();
 
         if (DockNative.FrameOf(target) is not { } frame || DockNative.MonitorOf(target) is not { } monitor) return;
-        var (side, top) = PixelSizes();
+        var (side, top) = PixelSizes(DockNative.GetDpiForWindow(_hwnd));
         var placement = DockLayout.Beside(frame, monitor.Work, Position, side, top);
         Move(placement.Bounds);
         Hint = placement.CoversBrowser ? CoversHint : null;
@@ -270,9 +292,11 @@ internal sealed unsafe class DockController : IDisposable
 
     private void PlaceAppBar()
     {
+        if (_guard.Tripped) return;
         if (!_appBarRegistered) RegisterAppBar();
-        if (DockNative.MonitorOf(_edgeMonitorSource) is not { } monitor) return;
-        var (side, top) = PixelSizes();
+        if (!_appBarRegistered || DockNative.MonitorOf(_edgeMonitorSource) is not { } monitor) return;
+        // Sized from the monitor, so the strip doesn't change size while CertWatch's window crosses monitors.
+        var (side, top) = PixelSizes(DockNative.MonitorDpiOf(_edgeMonitorSource));
         var data = NewAppBarData();
         data.uEdge = Position switch { DockPosition.Left => DockNative.ABE_LEFT, DockPosition.Top => DockNative.ABE_TOP, _ => DockNative.ABE_RIGHT };
         data.rc = DockNative.RECT.From(DockLayout.Edge(monitor.Monitor, Position, side, top));
@@ -280,28 +304,43 @@ internal sealed unsafe class DockController : IDisposable
         var bounds = DockLayout.Refit(data.rc.ToPixelRect(), Position, side, top);
         if (bounds.IsEmpty || bounds.Width > 16384 || bounds.Height > 16384) return;
         _edgeMonitorSource = _hwnd;
-        // Already reserved and already there: setting it again would notify every app bar (us included) and loop.
-        if (bounds == _lastAppBar && CurrentBounds() == bounds) return;
-        // A real app bar moves a few times at most when the taskbar or a display changes. Many moves a
-        // second means the move/notify cycle is feeding itself: stop docking rather than spin.
-        if (TooManyPlacements())
+        var now = Environment.TickCount64;
+
+        // Reserve only when the reservation itself changes (the taskbar, another app bar or a display moved).
+        // Never because CertWatch's window isn't where it should be: re-reserving can't fix that, and each
+        // reservation resizes every maximised window on the desktop.
+        if (bounds != _lastAppBar)
         {
-            _window.Dispatcher.BeginInvoke(() =>
+            if (!_guard.AllowReservation(now))
             {
-                Apply(DockPosition.Floating, Anchor);
-                PlacementLoopStopped?.Invoke();
-            });
+                StopScreenEdge();
+                return;
+            }
+            data.rc = DockNative.RECT.From(bounds);
+            DockNative.SHAppBarMessage(DockNative.ABM_SETPOS, ref data);
+            _lastAppBar = bounds;
+            LogService.Debug("dock", () => $"Screen edge reserved: {Position} {bounds.Left},{bounds.Top} {bounds.Width}x{bounds.Height}");
+        }
+
+        if (CurrentBounds() == bounds) return;
+        if (!_guard.AllowMove(now))
+        {
+            StopScreenEdge();
             return;
         }
-        data.rc = DockNative.RECT.From(bounds);
-        DockNative.SHAppBarMessage(DockNative.ABM_SETPOS, ref data);
-        _lastAppBar = bounds;
         Move(bounds);
     }
 
-    private (int Side, int Top) PixelSizes()
+    /// <summary>The guard tripped: give the edge back at once (that stops the work-area changes), then tell the shell.</summary>
+    private void StopScreenEdge()
     {
-        var dpi = DockNative.GetDpiForWindow(_hwnd);
+        RemoveAppBar();
+        var reason = _guard.Reason ?? "it kept re-placing itself";
+        _window.Dispatcher.BeginInvoke(() => PlacementLoopStopped?.Invoke(reason));
+    }
+
+    private static (int Side, int Top) PixelSizes(uint dpi)
+    {
         var scale = dpi == 0 ? 1.0 : dpi / 96.0;
         return ((int)Math.Round(SideWidth * scale), (int)Math.Round(TopHeight * scale));
     }
@@ -412,6 +451,7 @@ internal sealed unsafe class DockController : IDisposable
         if (_appBarRegistered || _hwnd == IntPtr.Zero) return;
         var data = NewAppBarData();
         _appBarRegistered = DockNative.SHAppBarMessage(DockNative.ABM_NEW, ref data) != 0;
+        if (_appBarRegistered) EdgeHeldChanged?.Invoke(true);
     }
 
     private void RemoveAppBar()
@@ -421,6 +461,7 @@ internal sealed unsafe class DockController : IDisposable
         DockNative.SHAppBarMessage(DockNative.ABM_REMOVE, ref data);
         _appBarRegistered = false;
         _lastAppBar = null;
+        if (!_releasingForCrash) EdgeHeldChanged?.Invoke(false);
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -433,8 +474,12 @@ internal sealed unsafe class DockController : IDisposable
                     SchedulePlace();
                     break;
                 case DockNative.ABN_FULLSCREENAPP:
-                    _fullscreenApp = lParam != IntPtr.Zero;
-                    ApplyTopmost();
+                    // Only on a change: flipping Topmost moves the window in the z-order, which notifies the shell again.
+                    if (_fullscreenApp != (lParam != IntPtr.Zero))
+                    {
+                        _fullscreenApp = lParam != IntPtr.Zero;
+                        ApplyTopmost();
+                    }
                     break;
             }
             handled = true;
@@ -459,7 +504,9 @@ internal sealed unsafe class DockController : IDisposable
     {
         try
         {
-            _instance?.RemoveAppBar();
+            if (_instance is not { } dock) return;
+            dock._releasingForCrash = true;
+            dock.RemoveAppBar();
         }
         catch (Exception)
         {

@@ -78,6 +78,19 @@ internal static unsafe partial class DockNative
         return (info.rcMonitor.ToPixelRect(), info.rcWork.ToPixelRect());
     }
 
+    [LibraryImport("shcore.dll")]
+    private static partial int GetDpiForMonitor(IntPtr hMonitor, int dpiType, out uint dpiX, out uint dpiY);
+
+    /// <summary>
+    /// The effective DPI of the monitor nearest the window (96 when unknown). Screen-edge sizes come from the
+    /// monitor, not from CertWatch's window, whose DPI changes while it moves between monitors.
+    /// </summary>
+    internal static uint MonitorDpiOf(IntPtr hwnd)
+    {
+        var monitor = MonitorFromWindow(hwnd, hwnd == IntPtr.Zero ? MONITOR_DEFAULTTOPRIMARY : MONITOR_DEFAULTTONEAREST);
+        return monitor != IntPtr.Zero && GetDpiForMonitor(monitor, 0 /* MDT_EFFECTIVE_DPI */, out var x, out _) == 0 && x > 0 ? x : 96;
+    }
+
     // ---- moving CertWatch's own window ----
     internal static readonly IntPtr HWND_TOP = IntPtr.Zero;
     internal const uint SWP_NOZORDER = 0x0004, SWP_NOACTIVATE = 0x0010, SWP_NOMOVE = 0x0002, SWP_NOSIZE = 0x0001;

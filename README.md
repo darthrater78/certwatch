@@ -140,7 +140,12 @@ Pick what it's docked to:
   so CertWatch covers its edge and says so; make the browser smaller or use the screen edge instead.
 - **The screen edge** (reserves space): CertWatch takes a strip of the screen the way the taskbar
   does, and Windows fits maximised windows, including the browser, into the rest. It stays on top
-  except while a full-screen app is showing.
+  except while a full-screen app is showing. Each time the strip is reserved, Windows resizes every
+  maximised window, so CertWatch keeps a tight budget on it: if the strip keeps re-placing itself, it
+  gives the edge back, docks to the browser window on the same side, says why, and leaves screen-edge
+  docking off until you restart CertWatch. If CertWatch didn't close cleanly while it held the edge
+  (a crash, a freeze, a power cut), the next start docks to the browser window instead; choose the
+  screen edge from **Dock** to use it again.
 
 Pop-ups are off while CertWatch is docked, since the verdict is already on screen beside the
 browser; they're still written to the log, and come back when you float the window again.
@@ -277,7 +282,9 @@ How CertWatch is built with regard to security, in statements you can check agai
   an app bar (`SHAppBarMessage`) and Windows itself fits other windows around it. CertWatch moves only
   its own window (`SetWindowPos` on its own handle); it never moves, resizes, re-parents, owns or
   activates a browser window. The reserved edge is given back when you undock, hide CertWatch to the
-  tray, minimise it, exit, or when CertWatch crashes.
+  tray, minimise it, exit, or when CertWatch crashes. A rolling budget on reservations and window moves
+  (at most 4 reservations in 10 s, 20 in 5 minutes, 12 moves in 2 s) gives the edge back if placement
+  starts feeding itself, so a fault can't keep resizing every window on the desktop.
 - **Comparing paths reads the connection table and, if you turn it on, the certificate viewer.**
   To tell whether the browser shares CertWatch's path it reads Windows' TCP connection table
   (`GetExtendedTcpTable`, no elevation) for the browser's processes: remote address and port only.
@@ -339,6 +346,11 @@ How CertWatch is built with regard to security, in statements you can check agai
   window's position and gets window events out of context (nothing is loaded into the browser),
   and it moves only its own window. Screen-edge docking reserves space through Windows' app bar API,
   and the reservation is released on undock, hide, minimise, exit and crash.
+- 2026-11-19: Screen-edge docking guard. A placement loop froze a test machine: each reservation
+  resizes every maximised window, and the old limit (20 a second, reset every second) let a slower
+  loop run forever. Reservations now happen only when the reserved strip itself changes, under a
+  rolling budget; when it's spent, the edge is given back and screen-edge docking stays off for the
+  session. A run that ends while holding the edge starts docked to the browser next time.
 - 2026-11-17: Browsers are monitored only once you tick them (**Browsers…**); nothing is read on first
   run. Debug logging now records only the host checked, not the full address-bar text, which could
   include paths and query strings (sign-in tokens, for example). Security pass: confirmed CertWatch

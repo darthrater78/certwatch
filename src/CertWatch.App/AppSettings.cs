@@ -21,6 +21,11 @@ internal sealed class AppSettings
     public DockPosition Dock { get; set; }
     /// <summary>Docked to the browser window (moves with it) or to the screen edge (reserves space).</summary>
     public DockAnchor DockAnchor { get; set; }
+    /// <summary>
+    /// True while CertWatch holds a screen edge. Still true at the next start means the last run ended without
+    /// giving the edge back (a freeze, a crash, a power-off), so that start docks to the browser instead.
+    /// </summary>
+    public bool ScreenEdgeHeld { get; set; }
     /// <summary>Switch to the tab of whichever monitored browser has focus.</summary>
     public bool FollowActiveBrowser { get; set; } = true;
     public bool KeepOnTop { get; set; }

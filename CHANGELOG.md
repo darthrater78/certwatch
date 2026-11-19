@@ -12,6 +12,9 @@ All notable changes to CertWatch. Versions are the UTC date of the release.
   all sites** for the rest. **Follow whichever browser is active** switches to the tab of
   the browser you click into, and **Keep on top** keeps the window above others. The choice is saved.
   Pop-ups are off while docked (still logged), since the verdict is already beside the browser.
+  Screen-edge docking guards itself: if the reserved strip keeps re-placing itself, CertWatch gives
+  the edge back and docks to the browser window instead for the rest of the session, and a run that
+  didn't close cleanly while holding the edge starts docked to the browser next time.
 - **Own-path detection**, for enterprise browsers with inspected results only: when CertWatch's check went through the ZTNA tunnel but the browser isn't
   connected to that address (an enterprise browser's own gateway),
   the card reads **Browser uses its own path** instead of presenting CertWatch's own result as the

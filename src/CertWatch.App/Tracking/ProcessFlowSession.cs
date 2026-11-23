@@ -19,12 +19,16 @@ namespace CertWatch.App.Tracking;
 internal sealed record ProcessTarget(string Name, int ProcessId, bool AllNamed, bool AllProcesses = false);
 
 /// <summary>One certificate-flow step shown under the table.</summary>
-internal sealed record FlowNode(string Role, string Title, string Detail, bool IsFirst);
+internal sealed record FlowNode(string Role, string Title, string Detail, bool IsFirst, StatusKind Status = StatusKind.Neutral)
+{
+    /// <summary>The connector above this step takes the step's colour (read by the shared Connector style).</summary>
+    public StatusKind LineStatus => Status;
+}
 
 /// <summary>A display-ready copy of one destination, safe to hand to the UI thread.</summary>
 internal sealed record FlowSnapshot(string Key, StatusKind Status, string Chip, string Host, string HostSource, string Remote,
     string Tls, string Issuer, string PathText, string Evidence, int Open, IReadOnlyList<FlowNode> Nodes, string Reaction,
-    PinView Pin, PinningGroup Group, string Owner);
+    PinView Pin, PinningGroup Group, string ProcessDisplay, string Exe);
 
 /// <summary>The pinning answer for display. Status drives the shared chip and tint styles.</summary>
 internal sealed record PinView(StatusKind Status, string Label, string Headline, string Why, string Next);
@@ -56,9 +60,11 @@ internal sealed class ProcessFlowSession : IDisposable
     private int _active;
     private int _generation;
     // All-processes mode: who owns each process id and connection. Each is bounded below.
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, string> _names = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, ProcessIdentity> _names = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ProcessIdentity> _identityByLabel = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<FlowKey, string> _ownerByFlow = new();
-    private const int MaxOwnedFlows = 4096;
+    private const int MaxOwnedFlows = 4096, MaxIdentities = 1024;
+    private volatile ProcessIdentity? _targetIdentity;
 
     /// <summary>Goes up on every clear, so a frame built before it can be ignored.</summary>
     public int Generation => Volatile.Read(ref _generation);
@@ -144,18 +150,22 @@ internal sealed class ProcessFlowSession : IDisposable
         lock (_gate) _tracker.Apply(update.Key, update.View, DateTimeOffset.UtcNow, update.Outcome, owner);
     }
 
-    private string NameOf(int pid) => _names.GetOrAdd(pid, static id =>
+    private ProcessIdentity IdentityOf(int pid) => _names.GetOrAdd(pid, static id => ProcessIdentityReader.Read(id));
+
+    // The label separates apps in the list, so two different exes with one process name stay apart.
+    private string NameOf(int pid)
     {
-        try
-        {
-            using var process = Process.GetProcessById(id);
-            return process.ProcessName;
-        }
-        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
-        {
-            return $"PID {id}";
-        }
-    });
+        var identity = IdentityOf(pid);
+        if (_identityByLabel.Count >= MaxIdentities) _identityByLabel.Clear();
+        _identityByLabel[identity.Label] = identity;
+        return identity.Label;
+    }
+
+    private ProcessIdentity WhoOwns(FlowDestination d)
+    {
+        if (d.Owner is null) return _targetIdentity ?? ProcessIdentity.From(_target.Name, null, null);
+        return _identityByLabel.TryGetValue(d.Owner, out var identity) ? identity : ProcessIdentity.From(d.Owner, null, null);
+    }
 
     private async Task RunAsync()
     {
@@ -187,6 +197,7 @@ internal sealed class ProcessFlowSession : IDisposable
         var now = DateTimeOffset.UtcNow;
         var pids = ResolvePids();
         _pids = pids;
+        if (!_target.AllProcesses && pids.Count > 0) _targetIdentity = IdentityOf(pids.Min());
         List<FlowConnection> connections;
         try
         {
@@ -301,6 +312,7 @@ internal sealed class ProcessFlowSession : IDisposable
         var different = d.CertEvidence == CertEvidence.DifferentFromSeen;
         var answer = PinningAssessor.Assess(d, _capture is not null);
         var (status, chip) = StatusOf(d, different);
+        var who = WhoOwns(d);
         var certNodes = CertNodes(d, different);
         var hostSource = d.HostEvidence switch
         {
@@ -315,13 +327,15 @@ internal sealed class ProcessFlowSession : IDisposable
 
         var nodes = new List<FlowNode>
         {
-            new("Process", d.Owner ?? _target.Name, d.Owner is not null || _target.AllNamed ? "all processes of this name" : $"PID {_target.ProcessId}", true),
-            new("Path", d.Egress?.InterfaceLabel ?? "Route unknown", d.Egress?.Kind.ToString() ?? "", false),
+            new("Process", who.DisplayName, d.Owner is not null || _target.AllNamed ? $"{who.Exe} · all processes of this name" : $"{who.Exe} · PID {_target.ProcessId}", true),
+            new("Path", d.Egress?.InterfaceLabel ?? "Route unknown", d.Egress?.Kind.ToString() ?? "", false, Status.OfEgress(d.Egress?.Kind.ToString())),
             new("Server", host, remote, false),
         };
-        nodes.AddRange(certNodes);
+        // The chain takes the verdict's colour. A chain that differs from CertWatch's own has no verdict.
+        var chainStatus = different ? StatusKind.Neutral : status;
+        nodes.AddRange(certNodes.Select(n => n with { Status = chainStatus }));
         return new FlowSnapshot($"{d.Owner}|{d.Remote}|{d.Port}|{d.Host}", status, chip, host, hostSource, remote, TlsLabel(d), issuer, pathText, d.EvidenceText, d.OpenConnections, nodes, ReactionLabel(d),
-            new PinView(answer.State == PinningState.Likely ? StatusKind.Untrusted : StatusKind.Neutral, answer.Label, answer.Headline, answer.Why, answer.Next), answer.Group, d.Owner ?? _target.Name);
+            new PinView(answer.State == PinningState.Likely ? StatusKind.Untrusted : StatusKind.Neutral, answer.Label, answer.Headline, answer.Why, answer.Next), answer.Group, who.DisplayName, who.Exe);
     }
 
     private static string ReactionLabel(FlowDestination d) => (d.Accepted, d.Refused) switch
@@ -390,7 +404,7 @@ internal sealed class ProcessFlowSession : IDisposable
         {
             var cert = chain[i];
             var selfSigned = cert.SubjectName.RawData.AsSpan().SequenceEqual(cert.IssuerName.RawData);
-            var role = i == 0 ? "Certificate" : selfSigned ? "Root" : "Intermediate";
+            var role = i == 0 ? "Site certificate" : selfSigned ? "Root" : "Intermediate";
             var name = cert.GetNameInfo(X509NameType.SimpleName, false);
             var issuer = cert.GetNameInfo(X509NameType.SimpleName, true);
             var hash = ProbeResult.Sha256Hex(cert)[..12];

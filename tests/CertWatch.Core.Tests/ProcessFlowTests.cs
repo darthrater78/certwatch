@@ -473,6 +473,42 @@ public class ProcessFlowTests
     }
 
     [Fact]
+    public void A_process_shows_its_friendly_name_and_exe()
+    {
+        var id = ProcessIdentity.From("chrome", @"C:\Program Files\Google\Chrome\chrome.exe", "Google Chrome");
+        Assert.Equal("Google Chrome", id.DisplayName);
+        Assert.Equal("chrome.exe", id.Exe);
+        Assert.Equal("Google Chrome (chrome.exe)", id.Label);
+    }
+
+    [Theory]
+    [InlineData("tool", @"C:\Apps\tool.exe", null)]
+    [InlineData("tool", @"C:\Apps\tool.exe", "  ")]
+    [InlineData("tool", @"C:\Apps\tool.exe", "TOOL")]
+    [InlineData("tool", @"C:\Apps\tool.exe", "tool.exe")]
+    public void A_missing_or_repeated_description_shows_just_the_exe(string name, string path, string? description)
+    {
+        var id = ProcessIdentity.From(name, path, description);
+        Assert.Equal("tool", id.DisplayName);
+        Assert.Equal("tool.exe", id.Label);
+    }
+
+    [Fact]
+    public void A_process_windows_wont_describe_falls_back_to_its_name() =>
+        Assert.Equal("lsass.exe", ProcessIdentity.From("lsass", null, null).Exe);
+
+    [Fact]
+    public void Exe_metadata_cant_disguise_a_name_with_hidden_characters()
+    {
+        var id = ProcessIdentity.From("evil", @"C:\x\evil.exe", "Trusted\u202Eexe.App\r\nName");
+        Assert.Equal("Trustedexe.AppName", id.Product);
+    }
+
+    [Fact]
+    public void A_long_description_is_capped() =>
+        Assert.Equal(ProcessIdentity.MaxTextLength, ProcessIdentity.From("a", null, new string('x', 500)).Product!.Length);
+
+    [Fact]
     public void A_non_tls_port_reads_not_checked()
     {
         var tracker = new ProcessFlowTracker();

@@ -353,7 +353,10 @@ How CertWatch is built with regard to security, in statements you can check agai
   the issuer's two names, capped in length. It never clicks, focuses or switches tabs in it. These
   readings stay in memory and aren't saved to history.
 - **Process flow reads connections and, if you turn it on, handshakes.** It reads the targeted
-  process's rows from the TCP connection table, looks up reverse DNS for unnamed addresses, and makes
+  process's exe path (`QueryFullProcessImageName`, limited-query access) and that file's version
+  description, as data: the exe is never loaded or run, files on network shares are skipped, and the
+  description is labelled beside the exe name because any program can claim any description. It
+  reads the process's rows from the TCP connection table, looks up reverse DNS for unnamed addresses, and makes
   its own TLS handshakes (at most 4 at a time) to routable addresses on TLS ports. **Read this
   process's handshakes** is off by default and needs CertWatch started as administrator. It opens a
   read-only raw IPv4 socket per local address (`SIO_RCVALL` at IP level, not promiscuous), checks the

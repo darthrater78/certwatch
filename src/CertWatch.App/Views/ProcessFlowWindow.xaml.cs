@@ -71,7 +71,8 @@ public partial class ProcessFlowWindow : Window
         if (OpenOnlyBox.IsChecked == true && row.Open == 0) return false;
         var text = SearchBox.Text.Trim();
         return text.Length == 0
-            || row.Owner.Contains(text, StringComparison.OrdinalIgnoreCase)
+            || row.ProcessDisplay.Contains(text, StringComparison.OrdinalIgnoreCase)
+            || row.Exe.Contains(text, StringComparison.OrdinalIgnoreCase)
             || row.Host.Contains(text, StringComparison.OrdinalIgnoreCase)
             || row.Remote.Contains(text, StringComparison.OrdinalIgnoreCase)
             || row.Issuer.Contains(text, StringComparison.OrdinalIgnoreCase);
@@ -98,7 +99,8 @@ public partial class ProcessFlowWindow : Window
             try
             {
                 using var process = Process.GetProcessById(pid);
-                choices.Add(new ProcessChoice(process.ProcessName, pid, count));
+                var name = process.ProcessName;
+                choices.Add(new ProcessChoice(name, pid, count, Identity: ProcessIdentityReader.Read(pid, name).Label));
             }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
             {
@@ -108,7 +110,8 @@ public partial class ProcessFlowWindow : Window
         var running = choices.OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ThenBy(c => c.ProcessId).ToList();
         var countByName = running.GroupBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.Sum(c => c.Connections), StringComparer.OrdinalIgnoreCase);
-        var added = _addedNames.Select(n => new ProcessChoice(n, 0, countByName.GetValueOrDefault(n), true));
+        var added = _addedNames.Select(n => new ProcessChoice(n, 0, countByName.GetValueOrDefault(n), true,
+            Identity: running.Find(c => string.Equals(c.Name, n, StringComparison.OrdinalIgnoreCase))?.Identity));
         var all = new ProcessChoice(ProcessChoice.AllName, -1, running.Sum(c => c.Connections), IsAll: true);
         _choices = [all, .. added, .. running];
         Choose(previous is null ? null : _choices.FirstOrDefault(c => c.ProcessId == previous.ProcessId
@@ -215,7 +218,6 @@ public partial class ProcessFlowWindow : Window
         _rows.Clear();
         UpdateFilterButtons();
         var target = new ProcessTarget(choice.Name, choice.ProcessId, AllNamedBox.IsChecked == true, choice.IsAll);
-        ProcessColumn.Visibility = choice.IsAll ? Visibility.Visible : Visibility.Collapsed;
         ProcessFlowSession? session = null;
         session = new ProcessFlowSession(target, _probe, _classifier, _routes,
             frame => Dispatcher.BeginInvoke(() => { if (ReferenceEquals(_session, session)) Show(frame, target); }));

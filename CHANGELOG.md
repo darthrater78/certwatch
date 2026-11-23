@@ -17,6 +17,7 @@ All notable changes to CertWatch. Versions are the UTC date of the release.
   on, a process that repeatedly refuses an inspected certificate this PC trusts, and never accepts
   one at that destination, reads **Pinning likely**. It's a behavioural signal, since an app with its
   own trust store looks the same. Results needing attention sort first, with filters and **Copy details**.
+  The list names each app and its exe, and the certificate flow is coloured by what each step means.
 - **Dock** in the header: keep CertWatch right or left of the browser (a 380px panel) or above it (a
   64px strip), docked to the browser window (moves with it) or to the screen edge (reserves space,
   so maximised windows fit around it). Docked, **Sites** lists only the page in focus; tick **Show

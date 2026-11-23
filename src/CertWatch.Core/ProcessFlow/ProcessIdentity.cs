@@ -1,0 +1,51 @@
+using System.Globalization;
+using System.Text;
+
+namespace CertWatch.Core.ProcessFlow;
+
+/// <summary>
+/// How a process is shown: its friendly name and its exe. The friendly name comes from the exe's own
+/// version resource, so any program can claim any name; the exe is always shown beside it.
+/// </summary>
+public sealed record ProcessIdentity(string ProcessName, string Exe, string? Product)
+{
+    public const int MaxTextLength = 80;
+
+    /// <summary>The friendly name when the exe has one, otherwise the process name.</summary>
+    public string DisplayName => Product ?? ProcessName;
+
+    public string Label => Product is null ? Exe : $"{Product} ({Exe})";
+
+    public static ProcessIdentity From(string processName, string? imagePath, string? description)
+    {
+        var name = Clean(processName) ?? "Unknown";
+        var exe = Clean(FileNameOf(imagePath)) ?? $"{name}.exe";
+        var product = Clean(description);
+        // A description that only repeats the name adds nothing.
+        if (product is not null && (product.Equals(name, StringComparison.OrdinalIgnoreCase) || product.Equals(exe, StringComparison.OrdinalIgnoreCase)))
+            product = null;
+        return new ProcessIdentity(name, exe, product);
+    }
+
+    private static string? FileNameOf(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return null;
+        var slash = path.LastIndexOfAny(['\\', '/']);
+        return slash < 0 ? path : path[(slash + 1)..];
+    }
+
+    // Exe metadata is untrusted: control and direction-override characters could disguise a name.
+    private static string? Clean(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        var kept = new StringBuilder(Math.Min(text.Length, MaxTextLength));
+        foreach (var c in text)
+        {
+            if (char.IsControl(c) || char.GetUnicodeCategory(c) == UnicodeCategory.Format) continue;
+            if (kept.Length == MaxTextLength) break;
+            kept.Append(c);
+        }
+        var cleaned = kept.ToString().Trim();
+        return cleaned.Length == 0 ? null : cleaned;
+    }
+}

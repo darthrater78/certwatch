@@ -4,16 +4,18 @@ using CertWatch.Core.ProcessFlow;
 namespace CertWatch.App.Presentation;
 
 /// <summary>A process the user can target: a running one, or a name added by hand.</summary>
-internal sealed record ProcessChoice(string Name, int ProcessId, int Connections, bool IsAdded = false, bool IsAll = false)
+internal sealed record ProcessChoice(string Name, int ProcessId, int Connections, bool IsAdded = false, bool IsAll = false, string? Identity = null)
 {
+    private string Shown => Identity ?? Name;
+
     public const string AllName = "All processes";
 
     private string ConnectionText => $"{Connections} connection{(Connections == 1 ? "" : "s")}";
 
     public string Label =>
         IsAll ? $"{Name}  ·  {ConnectionText}"
-        : IsAdded ? $"{Name}  ·  added  ·  {(Connections == 0 ? "no connections yet" : ConnectionText)}"
-        : $"{Name}  ·  PID {ProcessId}  ·  {ConnectionText}";
+        : IsAdded ? $"{Shown}  ·  added  ·  {(Connections == 0 ? "no connections yet" : ConnectionText)}"
+        : $"{Shown}  ·  PID {ProcessId}  ·  {ConnectionText}";
 }
 
 /// <summary>One destination in the process view. Kept across refreshes so the selection holds.</summary>
@@ -25,8 +27,10 @@ internal sealed class FlowRow(string key) : Observable
     public StatusKind Status { get => _status; private set => Set(ref _status, value); }
     private string _chip = "";
     public string Chip { get => _chip; private set => Set(ref _chip, value); }
-    private string _owner = "";
-    public string Owner { get => _owner; private set => Set(ref _owner, value); }
+    private string _processDisplay = "";
+    public string ProcessDisplay { get => _processDisplay; private set => Set(ref _processDisplay, value); }
+    private string _exe = "";
+    public string Exe { get => _exe; private set => Set(ref _exe, value); }
     private string _host = "";
     public string Host { get => _host; private set => Set(ref _host, value); }
     private string _hostSource = "";
@@ -59,7 +63,8 @@ internal sealed class FlowRow(string key) : Observable
 
     public void Update(FlowSnapshot s)
     {
-        Owner = s.Owner;
+        ProcessDisplay = s.ProcessDisplay;
+        Exe = s.Exe;
         Status = s.Status;
         Chip = s.Chip;
         Host = s.Host;
@@ -81,7 +86,7 @@ internal sealed class FlowRow(string key) : Observable
     {
         var lines = new List<string>
         {
-            $"Process: {Owner}",
+            $"Process: {ProcessDisplay} ({Exe})",
             $"Host: {Host} ({HostSource})",
             $"Pinning: {Pin?.Headline}",
             $"Why: {Pin?.Why}",

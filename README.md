@@ -78,6 +78,12 @@ likely** (see [How it decides](#how-it-decides)). CertWatch's own handshakes go 
 8443, or a port where a real TLS handshake was seen, so non-TLS services aren't contacted.
 QUIC/HTTP/3 runs over UDP and isn't listed. Results stay in memory and aren't added to history.
 
+Many servers host several sites and won't send a certificate until told which one is wanted. For a
+connection whose hostname CertWatch didn't see, it tries the hostnames that same app used elsewhere
+and keeps one only if the certificate is valid for it, labelled **Inferred**. If none fits, the row
+reads **Needs hostname**: the server has a certificate, and a new connection from the app will
+reveal which name to ask for.
+
 **All processes** gives each app its own row per destination, so one app's result can't hide
 another's, and leaves out local (loopback) connections. CertWatch then makes its own handshakes to
 the TLS destinations of every app on this PC, and with handshake reading on it reads every app's
@@ -358,7 +364,9 @@ How CertWatch is built with regard to security, in statements you can check agai
   description, as data: the exe is never loaded or run, files on network shares are skipped, and the
   description is labelled beside the exe name because any program can claim any description. It
   reads the process's rows from the TCP connection table, looks up reverse DNS for unnamed addresses, and makes
-  its own TLS handshakes (at most 4 at a time) to routable addresses on TLS ports. **Read this
+  its own TLS handshakes (at most 4 at a time) to routable addresses on TLS ports. If a server refuses a handshake without a hostname, it retries
+  with up to 8 hostnames that same app was seen using, keeping one only if the certificate is valid
+  for it. **Read this
   process's handshakes** is off by default and needs CertWatch started as administrator. It opens a
   read-only raw IPv4 socket per local address (`SIO_RCVALL` at IP level, not promiscuous), checks the
   owner of each new ClientHello against the connection table, and drops every other connection's

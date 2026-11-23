@@ -18,6 +18,8 @@ All notable changes to CertWatch. Versions are the UTC date of the release.
   one at that destination, reads **Pinning likely**. It's a behavioural signal, since an app with its
   own trust store looks the same. Results needing attention sort first, with filters and **Copy details**.
   The list names each app and its exe, and the certificate flow is coloured by what each step means.
+  A server that won't send a certificate without a hostname is retried with names the same app uses,
+  and otherwise reads **Needs hostname** instead of an error.
 - **Dock** in the header: keep CertWatch right or left of the browser (a 380px panel) or above it (a
   64px strip), docked to the browser window (moves with it) or to the screen edge (reserves space,
   so maximised windows fit around it). Docked, **Sites** lists only the page in focus; tick **Show

@@ -50,6 +50,7 @@ public sealed class CertProbe : ICertProbe
         // A fixed address is the browser's own connection target: connect to it directly, never via a proxy.
         var proxyUri = address is null ? ResolveProxy(endpoint) : null;
         IPAddress? remote = null;
+        var handshakeStarted = false;
 
         try
         {
@@ -93,6 +94,7 @@ public sealed class CertProbe : ICertProbe
                 },
             };
 
+            handshakeStarted = true;
             try
             {
                 await ssl.AuthenticateAsClientAsync(options, token);
@@ -113,7 +115,7 @@ public sealed class CertProbe : ICertProbe
         }
         catch (Exception ex) when (ex is SocketException or IOException or System.Security.Authentication.AuthenticationException)
         {
-            return Build(endpoint, chain, policyErrors, proxyUri, clientCertRequested, null, ex.Message, remote);
+            return Build(endpoint, chain, policyErrors, proxyUri, clientCertRequested, null, ex.Message, remote, handshakeStarted);
         }
     }
 
@@ -163,8 +165,9 @@ public sealed class CertProbe : ICertProbe
     }
 
     private static ProbeResult Build(SiteEndpoint endpoint, List<X509Certificate2> chain, SslPolicyErrors errors,
-        Uri? proxy, bool clientCertRequested, SslStream? ssl, string? error, IPAddress? remote) => new()
+        Uri? proxy, bool clientCertRequested, SslStream? ssl, string? error, IPAddress? remote, bool handshakeFailed = false) => new()
     {
+        HandshakeFailed = handshakeFailed,
         RemoteAddress = remote,
         Endpoint = endpoint,
         Timestamp = DateTimeOffset.UtcNow,

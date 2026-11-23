@@ -527,6 +527,112 @@ public class ProcessFlowTests
     public void A_long_description_is_capped() =>
         Assert.Equal(ProcessIdentity.MaxTextLength, ProcessIdentity.From("a", null, new string('x', 500)).Product!.Length);
 
+    private static ProbeResult Refused(string host) => new()
+    {
+        Endpoint = new SiteEndpoint(host, 443), Timestamp = T0, Error = "handshake failure", HandshakeFailed = true,
+    };
+
+    // An unnamed address whose handshake was refused, beside a destination where the app's real hostname was seen.
+    private static (ProcessFlowTracker Tracker, FlowDestination Unnamed) RefusedRow(string? unnamedOwner = null, string? knownOwner = null)
+    {
+        var tracker = new ProcessFlowTracker();
+        var unnamed = Conn("203.0.113.9", localPort: 50001) with { ProcessName = unnamedOwner };
+        var known = Conn("203.0.113.20", localPort: 50002) with { ProcessName = knownOwner };
+        tracker.Apply(known.Key, View("app.example"), T0, owner: knownOwner);
+        tracker.Update([unnamed, known], T0);
+        var row = Assert.Single(tracker.TakeNameLookups(4));
+        tracker.ApplyInferredName(row, null, T0);
+        foreach (var request in tracker.TakeProbes(T0, 4))
+            tracker.CompleteProbe(request.Destination, request.Destination == row ? Refused("203.0.113.9") : null, null, null, T0);
+        return (tracker, row);
+    }
+
+    [Fact]
+    public void A_refused_handshake_reads_needs_hostname_not_no_certificate()
+    {
+        var (_, row) = RefusedRow();
+        Assert.True(row.NeedsHostname);
+        var answer = PinningAssessor.Assess(row, readingHandshakes: true);
+        Assert.Equal(PinningState.NeedsHostname, answer.State);
+        Assert.Contains("has a certificate", answer.Why);
+        Assert.Contains("won't send it without a hostname", row.EvidenceText);
+    }
+
+    [Fact]
+    public void A_timeout_is_not_called_needing_a_hostname()
+    {
+        var tracker = new ProcessFlowTracker();
+        tracker.Update([Conn()], T0);
+        var row = Assert.Single(tracker.TakeNameLookups(4));
+        tracker.ApplyInferredName(row, null, T0);
+        var request = Assert.Single(tracker.TakeProbes(T0, 4));
+        tracker.CompleteProbe(row, new ProbeResult { Endpoint = request.Endpoint, Timestamp = T0, Error = "Timed out" }, null, null, T0);
+        Assert.False(row.NeedsHostname);
+        Assert.Empty(tracker.TakeHostnameRetries(4));
+    }
+
+    [Fact]
+    public void A_retried_hostname_is_accepted_when_the_certificate_is_valid_for_it()
+    {
+        using var cert = Cert("app.example");
+        var (tracker, row) = RefusedRow();
+        var retry = Assert.Single(tracker.TakeHostnameRetries(4));
+        Assert.Equal(new SiteEndpoint("app.example", 443), retry.Endpoint);
+        Assert.Empty(tracker.TakeHostnameRetries(4));
+
+        tracker.CompleteHostnameRetry(retry, Probe("app.example", cert), null, null, T0);
+        Assert.Equal("app.example", row.Host);
+        Assert.Equal(HostEvidence.Inferred, row.HostEvidence);
+        Assert.False(row.NeedsHostname);
+        Assert.Contains("this app uses elsewhere", row.EvidenceText);
+    }
+
+    [Fact]
+    public void A_retried_hostname_is_rejected_when_the_certificate_doesnt_match()
+    {
+        using var cert = Cert("other.example");
+        var (tracker, row) = RefusedRow();
+        var retry = Assert.Single(tracker.TakeHostnameRetries(4));
+        var mismatch = new ProbeResult
+        {
+            Endpoint = retry.Endpoint, Timestamp = T0, Chain = [cert], PolicyErrors = System.Net.Security.SslPolicyErrors.RemoteCertificateNameMismatch,
+        };
+        tracker.CompleteHostnameRetry(retry, mismatch, null, null, T0);
+        Assert.Null(row.Host);
+        Assert.True(row.NeedsHostname);
+        Assert.Empty(tracker.TakeHostnameRetries(4));
+    }
+
+    [Fact]
+    public void One_apps_hostnames_are_never_sent_for_another_app()
+    {
+        var (tracker, _) = RefusedRow(unnamedOwner: "appone", knownOwner: "apptwo");
+        Assert.Empty(tracker.TakeHostnameRetries(4));
+    }
+
+    [Fact]
+    public void Hostname_retries_are_capped_per_address()
+    {
+        var tracker = new ProcessFlowTracker();
+        var unnamed = Conn("203.0.113.9", localPort: 50000);
+        var known = Enumerable.Range(1, ProcessFlowTracker.MaxHostnameTries + 4)
+            .Select(i => (Conn($"198.51.100.{i}", localPort: 51000 + i), $"h{i}.example")).ToList();
+        foreach (var (conn, host) in known) tracker.Apply(conn.Key, View(host), T0);
+        tracker.Update([unnamed, .. known.Select(k => k.Item1)], T0);
+        var row = Assert.Single(tracker.TakeNameLookups(4));
+        tracker.ApplyInferredName(row, null, T0);
+        foreach (var request in tracker.TakeProbes(T0, 64))
+            tracker.CompleteProbe(request.Destination, request.Destination == row ? Refused("203.0.113.9") : null, null, null, T0);
+
+        var tries = 0;
+        while (tracker.TakeHostnameRetries(1) is [var retry])
+        {
+            tries++;
+            tracker.CompleteHostnameRetry(retry, Refused(retry.Endpoint.Host), null, null, T0);
+        }
+        Assert.Equal(ProcessFlowTracker.MaxHostnameTries, tries);
+    }
+
     [Fact]
     public void A_non_tls_port_reads_not_checked()
     {

@@ -50,7 +50,7 @@ public enum PinningSignal
 }
 
 /// <summary>A handshake CertWatch should make for a row.</summary>
-public sealed record FlowProbeRequest(FlowDestination Destination, SiteEndpoint Endpoint, IPAddress Address);
+public sealed record FlowProbeRequest(FlowDestination Destination, SiteEndpoint Endpoint, IPAddress Address, bool IsHostnameRetry = false);
 
 /// <summary>One place the targeted process connects to: an address, a port and, when known, a host name.</summary>
 public sealed class FlowDestination(IPAddress remote, int port, DateTimeOffset now, string? owner = null)
@@ -113,6 +113,17 @@ public sealed class FlowDestination(IPAddress remote, int port, DateTimeOffset n
 
     internal byte[]? ObservedIssuer { get; set; }
 
+    /// <summary>
+    /// The server refused CertWatch's handshake and no real hostname is known. Servers hosting many
+    /// sites do this: they have certificates, but won't pick one until told which site is wanted.
+    /// </summary>
+    public bool NeedsHostname => Probe is { Leaf: null, HandshakeFailed: true } && HostEvidence != HostEvidence.Observed;
+
+    /// <summary>The inferred name is one this app uses elsewhere, and this server's certificate is valid for it.</summary>
+    public bool HostMatchedFromApp { get; internal set; }
+
+    internal HashSet<string> TriedHosts { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     public CertEvidence CertEvidence
     {
         get
@@ -137,14 +148,17 @@ public sealed class FlowDestination(IPAddress remote, int port, DateTimeOffset n
                 CertEvidence.DifferentFromSeen => "The process received a different certificate from the one CertWatch's own handshake got. The process's certificate is shown.",
                 CertEvidence.OwnHandshake when ObservedVersion == TlsHandshakeParser.Tls13 => "TLS 1.3 encrypts the certificate, so this is CertWatch's own handshake to the same address and host.",
                 CertEvidence.OwnHandshake => "Certificate from CertWatch's own handshake to the same address, not from the process's connection.",
+                _ when NeedsHostname => "The server has a certificate but won't send it without a hostname, and CertWatch doesn't know which one this connection used.",
                 _ => "No certificate yet.",
             };
             var host = HostEvidence switch
             {
                 HostEvidence.Observed when EncryptedClientHello => " The process uses Encrypted Client Hello, so the name shown is only the outer one.",
                 HostEvidence.Observed => "",
+                HostEvidence.Inferred when HostMatchedFromApp => " The host is one this app uses elsewhere and this server's certificate is valid for it, but this connection may be using another name on the same certificate.",
                 HostEvidence.Inferred => " The host is a guess from reverse DNS and may be wrong on a shared address.",
-                _ => " No host name is known, so the server chose which certificate to send.",
+                _ when Probe?.Leaf is not null => " No host name is known, so the server chose which certificate to send.",
+                _ => "",
             };
             return cert + host;
         }
@@ -162,6 +176,8 @@ public sealed class ProcessFlowTracker
     public const int MaxDestinations = 256;
     /// <summary>Refusals needed before a row reads "Pinning likely", so one dropped connection can't.</summary>
     public const int PinningRefusals = 3;
+    /// <summary>At most this many of an app's hostnames are tried per address, so few names go to a server that doesn't host them.</summary>
+    public const int MaxHostnameTries = 8;
     public static readonly TimeSpan RecheckAfter = TimeSpan.FromMinutes(5), RetryAfter = TimeSpan.FromMinutes(1);
     private static readonly int[] TlsPorts = [443, 8443];
 
@@ -256,6 +272,48 @@ public sealed class ProcessFlowTracker
             .ToList();
         foreach (var row in due) row.ProbeInFlight = true;
         return due.Select(r => new FlowProbeRequest(r, new SiteEndpoint(r.Host ?? r.Remote.ToString(), r.Port), r.Remote)).ToList();
+    }
+
+    /// <summary>
+    /// For servers that refused a handshake with no usable name: the next hostname to try, chosen only
+    /// from names the same app was seen sending on the same port. Each is tried once per address.
+    /// </summary>
+    public IReadOnlyList<FlowProbeRequest> TakeHostnameRetries(int max)
+    {
+        var due = new List<FlowProbeRequest>();
+        foreach (var row in _rows.Values.Where(r => r.OpenConnections > 0 && !r.ProbeInFlight && r.NeedsHostname && IsCheckable(r)))
+        {
+            if (due.Count >= max) break;
+            if (row.TriedHosts.Count >= MaxHostnameTries || NextHostFor(row) is not { } host) continue;
+            row.TriedHosts.Add(host);
+            row.ProbeInFlight = true;
+            due.Add(new FlowProbeRequest(row, new SiteEndpoint(host, row.Port), row.Remote, IsHostnameRetry: true));
+        }
+        return due;
+    }
+
+    // An Encrypted Client Hello's visible name is only the front, so it isn't offered to other servers.
+    private string? NextHostFor(FlowDestination row) => _rows.Values
+        .Where(c => c.HostEvidence == HostEvidence.Observed && !c.EncryptedClientHello && c.Port == row.Port && c.Owner == row.Owner
+                    && c.Host is not null && !row.TriedHosts.Contains(c.Host))
+        .OrderByDescending(c => c.OpenConnections)
+        .ThenBy(c => c.Host, StringComparer.Ordinal)
+        .Select(c => c.Host)
+        .FirstOrDefault();
+
+    /// <summary>Accepts a retried name only if the server's certificate is valid for exactly that name.</summary>
+    public void CompleteHostnameRetry(FlowProbeRequest request, ProbeResult? result, Classification? classification, EgressInfo? egress, DateTimeOffset now)
+    {
+        var row = request.Destination;
+        row.ProbeInFlight = false;
+        if (result is not { Succeeded: true } || !DirectPath.ServesSite(result)) return;
+        row.Host = request.Endpoint.Host;
+        row.HostEvidence = HostEvidence.Inferred;
+        row.HostMatchedFromApp = true;
+        row.Probe = result;
+        row.Classification = classification;
+        row.Egress = egress;
+        row.NextProbe = now + RecheckAfter;
     }
 
     /// <summary>Stores a finished handshake; a null result means it couldn't run.</summary>

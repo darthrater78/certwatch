@@ -32,6 +32,9 @@ public sealed class ProbeResult
 
     public string? Error { get; init; }
 
+    /// <summary>The server was reached but ended the TLS handshake without sending a certificate.</summary>
+    public bool HandshakeFailed { get; init; }
+
     public bool Succeeded => Error is null && Chain.Count > 0;
     public X509Certificate2? Leaf => Chain.Count > 0 ? Chain[0] : null;
     public X509Certificate2? Top => Chain.Count > 0 ? Chain[^1] : null;

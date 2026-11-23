@@ -222,7 +222,9 @@ internal sealed class ProcessFlowSession : IDisposable
             generation = _generation;
             _tracker.Update(connections, now);
             names = _tracker.TakeNameLookups(MaxConcurrent);
-            probes = _tracker.TakeProbes(now, Math.Max(0, MaxConcurrent - Volatile.Read(ref _active)));
+            var budget = Math.Max(0, MaxConcurrent - Volatile.Read(ref _active));
+            var retries = _tracker.TakeHostnameRetries(budget);
+            probes = [.. retries, .. _tracker.TakeProbes(now, budget - retries.Count)];
             rows = _tracker.Destinations.OrderByDescending(d => d.OpenConnections > 0).ThenBy(d => d.Host ?? d.Remote.ToString(), StringComparer.Ordinal).Select(Snapshot).ToList();
         }
         foreach (var row in names) _ = Task.Run(() => LookUpNameAsync(row));
@@ -307,7 +309,11 @@ internal sealed class ProcessFlowSession : IDisposable
         finally
         {
             Interlocked.Decrement(ref _active);
-            lock (_gate) _tracker.CompleteProbe(request.Destination, result, classification, egress, DateTimeOffset.UtcNow);
+            lock (_gate)
+            {
+                if (request.IsHostnameRetry) _tracker.CompleteHostnameRetry(request, result, classification, egress, DateTimeOffset.UtcNow);
+                else _tracker.CompleteProbe(request.Destination, result, classification, egress, DateTimeOffset.UtcNow);
+            }
         }
     }
 
@@ -352,6 +358,7 @@ internal sealed class ProcessFlowSession : IDisposable
 
     private static (StatusKind, string) StatusOf(FlowDestination d, bool different)
     {
+        if (d.NeedsHostname) return (StatusKind.Neutral, "Needs hostname");
         if (different) return (StatusKind.Neutral, "Different cert");
         if (d.Classification is not { } c) return (StatusKind.Neutral, d.CertEvidence == CertEvidence.SeenInHandshake ? "Seen" : "Not checked");
         var kind = d.Egress?.Kind.ToString();

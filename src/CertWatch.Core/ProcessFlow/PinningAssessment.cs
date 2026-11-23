@@ -7,6 +7,7 @@ public enum PinningState
 {
     NotChecked,
     Checking,
+    NeedsHostname,
     NotInspected,
     RootNotTrusted,
     NeedsHandshakeReading,
@@ -41,6 +42,10 @@ public static class PinningAssessor
 
     public static PinningAssessment Assess(FlowDestination d, bool readingHandshakes)
     {
+        if (d.NeedsHostname)
+            return new(PinningState.NeedsHostname, "Can't tell", "Can't tell: this server needs a hostname",
+                "The server has a certificate but won't send it until told which site is wanted, and CertWatch doesn't know which site this connection used.",
+                readingHandshakes ? "Open a new connection from the app so CertWatch can read its hostname." : TurnOnReading);
         if (d.Classification is not { } classification) return NoCertificateYet(d);
         if (classification.Verdict == Verdict.Error)
             return new(PinningState.Checking, "Can't tell", "Can't tell yet", "CertWatch couldn't get a certificate from this destination.", "It tries again automatically.");

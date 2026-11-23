@@ -15,7 +15,8 @@ site). It calls out changes in pop-ups, flags mTLS sites, and keeps an encrypted
 > **CertWatch is not in the browser's path.** It never proxies, intercepts, decrypts or alters
 > traffic, and connections never pass through it. It reads handshakes only if you start CertWatch as
 > administrator and turn on **Read this process's handshakes** in **Process flow**; that reads the
-> cleartext TLS handshake of the one process you chose, in memory, and nothing else.
+> cleartext TLS handshake of the process you chose (or of every process, if you chose **All
+> processes**), in memory, and nothing else.
 
 What CertWatch actually does, in order:
 
@@ -55,9 +56,12 @@ starts or drives a browser. The details, checkable against the code, are under
 
 ## Process flow
 
-**Process flow…** in the header targets any running process with open connections and lists where
-it connects, with the path and certificate chain for each destination. Every row says how it knows
-what it shows:
+**Process flow…** in the header targets a process and lists where it connects, with the path and
+certificate chain for each destination. Pick **All processes**, pick one with open connections, or type its name under
+**Add by name** (`java` or `app.exe`). A named process doesn't need to be running yet, so you can
+press **Start** first and catch its first handshakes when it launches. Added names last until the
+window closes. **Clear list** empties the results and their accepted and refused counts; connections
+still open reappear. Every row says how it knows what it shows:
 
 | | Without admin (default) | Started as administrator, handshake reading on |
 |---|---|---|
@@ -72,6 +76,33 @@ accepted and refused, and repeated refusal of a trusted inspected certificate re
 likely** (see [How it decides](#how-it-decides)). CertWatch's own handshakes go only to routable addresses on ports 443 and
 8443, or a port where a real TLS handshake was seen, so non-TLS services aren't contacted.
 QUIC/HTTP/3 runs over UDP and isn't listed. Results stay in memory and aren't added to history.
+
+**All processes** gives each app its own row per destination, so one app's result can't hide
+another's, and leaves out local (loopback) connections. CertWatch then makes its own handshakes to
+the TLS destinations of every app on this PC, and with handshake reading on it reads every app's
+handshakes, so use it when that's what you want to show. The list holds up to 256 rows.
+
+### How to tell if a process is pinned
+
+Pinning only shows when an app is handed a replaced certificate, so the destination must be
+inspected for the test to mean anything.
+
+1. Start CertWatch as administrator, open **Process flow…**, and choose or add the app.
+2. Press **Start**, turn on **Read this process's handshakes**, then restart the app and use the
+   feature that fails.
+3. Read the **Pinned?** column, or select a row for the reason and the next step.
+
+| Pinned? | Meaning | What to do |
+|---|---|---|
+| **Pinning likely** | Refused a trusted inspected certificate 3 or more times and never accepted it | Add an inspection bypass and retest. If it now connects, inspection was what broke it |
+| **Refused 1 of 3** | Refused it, but not enough times to call | Use the feature again so it retries |
+| **No sign** | Completed a connection while the destination was inspected | Nothing |
+| **Can't tell** | The test hasn't happened: not inspected, this PC doesn't trust the root, or handshakes aren't being read | Follow the next step shown for that row |
+| **Waiting** | Inspected, with no new connection seen yet | Restart the app |
+
+The bypass retest is the strongest evidence CertWatch can point you to, but it still doesn't separate
+pinning from an app's private trust store. To tell those apart, add the inspection root to the app's
+own trust store: an app that then connects wasn't pinned.
 
 ## Screenshots
 
@@ -327,7 +358,7 @@ How CertWatch is built with regard to security, in statements you can check agai
   process's handshakes** is off by default and needs CertWatch started as administrator. It opens a
   read-only raw IPv4 socket per local address (`SIO_RCVALL` at IP level, not promiscuous), checks the
   owner of each new ClientHello against the connection table, and drops every other connection's
-  bytes immediately. For the chosen process it keeps only the cleartext handshake, capped at 64 KB
+  bytes immediately. For the chosen process (or each process, with **All processes**) it keeps only the cleartext handshake, capped at 64 KB
   per direction, then discards it. Packet data is parsed as untrusted, never written to disk, and
   can't be used to block, change or inject traffic. Results are kept in memory only.
 - **Privileges.** Runs as the signed-in user (`asInvoker`) and never asks to elevate. If you start it

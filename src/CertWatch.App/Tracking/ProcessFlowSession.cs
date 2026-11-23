@@ -16,16 +16,20 @@ using CertWatch.Core.Trust;
 namespace CertWatch.App.Tracking;
 
 /// <summary>The process to follow; with <see cref="AllNamed"/>, every process of that name.</summary>
-internal sealed record ProcessTarget(string Name, int ProcessId, bool AllNamed);
+internal sealed record ProcessTarget(string Name, int ProcessId, bool AllNamed, bool AllProcesses = false);
 
 /// <summary>One certificate-flow step shown under the table.</summary>
 internal sealed record FlowNode(string Role, string Title, string Detail, bool IsFirst);
 
 /// <summary>A display-ready copy of one destination, safe to hand to the UI thread.</summary>
 internal sealed record FlowSnapshot(string Key, StatusKind Status, string Chip, string Host, string HostSource, string Remote,
-    string Tls, string Issuer, string PathText, string Evidence, int Open, IReadOnlyList<FlowNode> Nodes, string Reaction);
+    string Tls, string Issuer, string PathText, string Evidence, int Open, IReadOnlyList<FlowNode> Nodes, string Reaction,
+    PinView Pin, PinningGroup Group, string Owner);
 
-internal sealed record FlowFrame(IReadOnlyList<FlowSnapshot> Rows, int ProcessCount, string? CaptureError);
+/// <summary>The pinning answer for display. Status drives the shared chip and tint styles.</summary>
+internal sealed record PinView(StatusKind Status, string Label, string Headline, string Why, string Next);
+
+internal sealed record FlowFrame(IReadOnlyList<FlowSnapshot> Rows, int ProcessCount, string? CaptureError, int Generation);
 
 /// <summary>
 /// Follows one process: reads its connections each second, makes CertWatch's own handshakes to where
@@ -46,10 +50,28 @@ internal sealed class ProcessFlowSession : IDisposable
     private readonly Lock _gate = new();
     private readonly CancellationTokenSource _stop = new();
     private readonly ConditionalWeakTable<object, IReadOnlyList<FlowNode>> _certNodes = [];
-    private RawHandshakeCapture? _capture;
+    private volatile RawHandshakeCapture? _capture;
     private volatile HashSet<int> _pids = [];
     private volatile string? _captureError;
     private int _active;
+    private int _generation;
+    // All-processes mode: who owns each process id and connection. Each is bounded below.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, string> _names = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<FlowKey, string> _ownerByFlow = new();
+    private const int MaxOwnedFlows = 4096;
+
+    /// <summary>Goes up on every clear, so a frame built before it can be ignored.</summary>
+    public int Generation => Volatile.Read(ref _generation);
+
+    /// <summary>Empties the results. Connections still open reappear on the next read.</summary>
+    public void ClearResults()
+    {
+        lock (_gate)
+        {
+            _tracker.Clear();
+            Interlocked.Increment(ref _generation);
+        }
+    }
 
     public ProcessFlowSession(ProcessTarget target, ICertProbe probe, InspectionClassifier classifier, IRouteLookup routes, Action<FlowFrame> publish)
     {
@@ -87,7 +109,7 @@ internal sealed class ProcessFlowSession : IDisposable
             return error;
         }
         _capture = capture;
-        LogService.Info("process", $"Reading handshakes of {_target.Name} only");
+        LogService.Info("process", _target.AllProcesses ? "Reading handshakes of all processes" : $"Reading handshakes of {_target.Name} only");
         return null;
     }
 
@@ -95,8 +117,16 @@ internal sealed class ProcessFlowSession : IDisposable
     {
         try
         {
-            return TcpConnections.FlowsFor(_pids).Any(c => c.LocalPort == key.LocalPort && c.RemotePort == key.RemotePort
+            // A process started moments ago may not be in the last one-second read, and its first
+            // handshakes are the ones that show pinning.
+            if (_target.AllNamed) _pids = ResolvePids();
+            var owner = TcpConnections.FlowsFor(_pids).FirstOrDefault(c => c.LocalPort == key.LocalPort && c.RemotePort == key.RemotePort
                 && Same(c.Remote, key.Remote) && Same(c.Local, key.Local));
+            if (owner is null) return false;
+            if (!_target.AllProcesses) return true;
+            if (_ownerByFlow.Count >= MaxOwnedFlows) _ownerByFlow.Clear();
+            _ownerByFlow[key] = NameOf(owner.ProcessId);
+            return true;
         }
         catch (Exception ex) when (ex is ExternalException or InvalidOperationException)
         {
@@ -108,8 +138,24 @@ internal sealed class ProcessFlowSession : IDisposable
 
     private void OnHandshake(HandshakeUpdate update)
     {
-        lock (_gate) _tracker.Apply(update.Key, update.View, DateTimeOffset.UtcNow, update.Outcome);
+        string? owner = null;
+        // Without a known owner the result can't be attributed to an app, so it isn't counted.
+        if (_target.AllProcesses && !_ownerByFlow.TryGetValue(update.Key, out owner)) return;
+        lock (_gate) _tracker.Apply(update.Key, update.View, DateTimeOffset.UtcNow, update.Outcome, owner);
     }
+
+    private string NameOf(int pid) => _names.GetOrAdd(pid, static id =>
+    {
+        try
+        {
+            using var process = Process.GetProcessById(id);
+            return process.ProcessName;
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            return $"PID {id}";
+        }
+    });
 
     private async Task RunAsync()
     {
@@ -145,6 +191,7 @@ internal sealed class ProcessFlowSession : IDisposable
         try
         {
             connections = TcpConnections.FlowsFor(pids);
+            if (_target.AllProcesses) connections = NameConnections(connections, pids);
         }
         catch (Exception ex) when (ex is ExternalException or InvalidOperationException)
         {
@@ -155,8 +202,10 @@ internal sealed class ProcessFlowSession : IDisposable
         IReadOnlyList<FlowDestination> names;
         IReadOnlyList<FlowProbeRequest> probes;
         IReadOnlyList<FlowSnapshot> rows;
+        int generation;
         lock (_gate)
         {
+            generation = _generation;
             _tracker.Update(connections, now);
             names = _tracker.TakeNameLookups(MaxConcurrent);
             probes = _tracker.TakeProbes(now, Math.Max(0, MaxConcurrent - Volatile.Read(ref _active)));
@@ -168,11 +217,26 @@ internal sealed class ProcessFlowSession : IDisposable
             Interlocked.Increment(ref _active);
             _ = Task.Run(() => ProbeAsync(request));
         }
-        _publish(new FlowFrame(rows, pids.Count, _captureError));
+        _publish(new FlowFrame(rows, pids.Count, _captureError, generation));
+    }
+
+    // Local traffic between apps says nothing about the network path, so it's left out of the full list.
+    private List<FlowConnection> NameConnections(List<FlowConnection> connections, HashSet<int> pids)
+    {
+        foreach (var gone in _names.Keys.Where(id => !pids.Contains(id)).ToList()) _names.TryRemove(gone, out _);
+        return connections.Where(c => !IPAddress.IsLoopback(c.Remote)).Select(c => c with { ProcessName = NameOf(c.ProcessId) }).ToList();
+    }
+
+    private static HashSet<int> AllConnectedProcesses()
+    {
+        var ids = TcpConnections.CountsByProcess().Keys.ToHashSet();
+        ids.ExceptWith([0, 4, Environment.ProcessId]); // Idle, System and CertWatch itself.
+        return ids;
     }
 
     private HashSet<int> ResolvePids()
     {
+        if (_target.AllProcesses) return AllConnectedProcesses();
         var ids = new HashSet<int>();
         if (_target.AllNamed)
         {
@@ -235,6 +299,7 @@ internal sealed class ProcessFlowSession : IDisposable
     private FlowSnapshot Snapshot(FlowDestination d)
     {
         var different = d.CertEvidence == CertEvidence.DifferentFromSeen;
+        var answer = PinningAssessor.Assess(d, _capture is not null);
         var (status, chip) = StatusOf(d, different);
         var certNodes = CertNodes(d, different);
         var hostSource = d.HostEvidence switch
@@ -250,12 +315,13 @@ internal sealed class ProcessFlowSession : IDisposable
 
         var nodes = new List<FlowNode>
         {
-            new("Process", _target.Name, _target.AllNamed ? "all processes of this name" : $"PID {_target.ProcessId}", true),
+            new("Process", d.Owner ?? _target.Name, d.Owner is not null || _target.AllNamed ? "all processes of this name" : $"PID {_target.ProcessId}", true),
             new("Path", d.Egress?.InterfaceLabel ?? "Route unknown", d.Egress?.Kind.ToString() ?? "", false),
             new("Server", host, remote, false),
         };
         nodes.AddRange(certNodes);
-        return new FlowSnapshot($"{d.Remote}|{d.Port}|{d.Host}", status, chip, host, hostSource, remote, TlsLabel(d), issuer, pathText, d.EvidenceText, d.OpenConnections, nodes, ReactionLabel(d));
+        return new FlowSnapshot($"{d.Owner}|{d.Remote}|{d.Port}|{d.Host}", status, chip, host, hostSource, remote, TlsLabel(d), issuer, pathText, d.EvidenceText, d.OpenConnections, nodes, ReactionLabel(d),
+            new PinView(answer.State == PinningState.Likely ? StatusKind.Untrusted : StatusKind.Neutral, answer.Label, answer.Headline, answer.Why, answer.Next), answer.Group, d.Owner ?? _target.Name);
     }
 
     private static string ReactionLabel(FlowDestination d) => (d.Accepted, d.Refused) switch
@@ -268,7 +334,6 @@ internal sealed class ProcessFlowSession : IDisposable
 
     private static (StatusKind, string) StatusOf(FlowDestination d, bool different)
     {
-        if (d.Pinning == PinningSignal.Likely) return (StatusKind.Neutral, "Pinning likely");
         if (different) return (StatusKind.Neutral, "Different cert");
         if (d.Classification is not { } c) return (StatusKind.Neutral, d.CertEvidence == CertEvidence.SeenInHandshake ? "Seen" : "Not checked");
         var kind = d.Egress?.Kind.ToString();

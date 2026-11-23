@@ -1,11 +1,19 @@
 using CertWatch.App.Tracking;
+using CertWatch.Core.ProcessFlow;
 
 namespace CertWatch.App.Presentation;
 
-/// <summary>A running process the user can target.</summary>
-internal sealed record ProcessChoice(string Name, int ProcessId, int Connections)
+/// <summary>A process the user can target: a running one, or a name added by hand.</summary>
+internal sealed record ProcessChoice(string Name, int ProcessId, int Connections, bool IsAdded = false, bool IsAll = false)
 {
-    public string Label => $"{Name}  ·  PID {ProcessId}  ·  {Connections} connection{(Connections == 1 ? "" : "s")}";
+    public const string AllName = "All processes";
+
+    private string ConnectionText => $"{Connections} connection{(Connections == 1 ? "" : "s")}";
+
+    public string Label =>
+        IsAll ? $"{Name}  ·  {ConnectionText}"
+        : IsAdded ? $"{Name}  ·  added  ·  {(Connections == 0 ? "no connections yet" : ConnectionText)}"
+        : $"{Name}  ·  PID {ProcessId}  ·  {ConnectionText}";
 }
 
 /// <summary>One destination in the process view. Kept across refreshes so the selection holds.</summary>
@@ -17,6 +25,8 @@ internal sealed class FlowRow(string key) : Observable
     public StatusKind Status { get => _status; private set => Set(ref _status, value); }
     private string _chip = "";
     public string Chip { get => _chip; private set => Set(ref _chip, value); }
+    private string _owner = "";
+    public string Owner { get => _owner; private set => Set(ref _owner, value); }
     private string _host = "";
     public string Host { get => _host; private set => Set(ref _host, value); }
     private string _hostSource = "";
@@ -35,6 +45,11 @@ internal sealed class FlowRow(string key) : Observable
     public string Reaction { get => _reaction; private set => Set(ref _reaction, value); }
     private int _open;
     public int Open { get => _open; private set => Set(ref _open, value); }
+    private PinView? _pin;
+    public PinView? Pin { get => _pin; private set => Set(ref _pin, value); }
+    private PinningGroup _group;
+    /// <summary>Also the sort order: what needs attention comes first.</summary>
+    public PinningGroup Group { get => _group; private set => Set(ref _group, value); }
     private IReadOnlyList<FlowNode> _nodes = [];
     public IReadOnlyList<FlowNode> Nodes
     {
@@ -44,6 +59,7 @@ internal sealed class FlowRow(string key) : Observable
 
     public void Update(FlowSnapshot s)
     {
+        Owner = s.Owner;
         Status = s.Status;
         Chip = s.Chip;
         Host = s.Host;
@@ -55,6 +71,30 @@ internal sealed class FlowRow(string key) : Observable
         Evidence = s.Evidence;
         Reaction = s.Reaction;
         Open = s.Open;
+        Pin = s.Pin;
+        Group = s.Group;
         Nodes = s.Nodes;
+    }
+
+    /// <summary>The row as plain text, for pasting into a ticket or bypass request.</summary>
+    public string ToReport()
+    {
+        var lines = new List<string>
+        {
+            $"Process: {Owner}",
+            $"Host: {Host} ({HostSource})",
+            $"Pinning: {Pin?.Headline}",
+            $"Why: {Pin?.Why}",
+            $"Next: {Pin?.Next}",
+            $"Inspection: {Chip}",
+            $"Address: {Remote}",
+            $"TLS: {Tls}",
+            $"Egress: {PathText}",
+            $"Process response: {(Reaction.Length == 0 ? "not seen" : Reaction)}",
+            "Certificate flow:",
+        };
+        lines.AddRange(Nodes.Select(n => $"  {n.Role}: {n.Title} ({n.Detail})"));
+        lines.Add($"Evidence: {Evidence}");
+        return string.Join(Environment.NewLine, lines);
     }
 }

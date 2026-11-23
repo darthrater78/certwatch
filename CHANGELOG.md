@@ -6,14 +6,17 @@ All notable changes to CertWatch. Versions are the UTC date of the release.
 
 ### Added
 
-- **Process flow**: choose any running process and see where it connects, the path each connection
-  takes, and the certificate chain, with each row labelled **Observed** or **Inferred**. Started as
+- **Process flow**: choose **All processes**, a running process, or add one by name before it starts, and see where it
+  connects, the path each connection takes, and the certificate chain, with each row labelled
+  **Observed** or **Inferred**. **Clear list** resets the results for a clean retest. Started as
   administrator, the optional **Read this process's handshakes** reads real host names and TLS 1.2
   certificates passively and flags a process that received a different certificate. Off by default,
   scoped to the chosen process, and kept in memory only.
-- **Pinning likely** in Process flow: with handshake reading on, a process that repeatedly refuses an
-  inspected certificate this PC trusts, and never accepts one at that destination, is flagged. It's
-  a behavioural signal, since an app with its own trust store looks the same.
+- **Pinned?** in Process flow: each destination reads **Pinning likely**, **Refused**, **No sign**,
+  **Waiting** or **Can't tell**, with the reason and the next step beside it. With handshake reading
+  on, a process that repeatedly refuses an inspected certificate this PC trusts, and never accepts
+  one at that destination, reads **Pinning likely**. It's a behavioural signal, since an app with its
+  own trust store looks the same. Results needing attention sort first, with filters and **Copy details**.
 - **Dock** in the header: keep CertWatch right or left of the browser (a 380px panel) or above it (a
   64px strip), docked to the browser window (moves with it) or to the screen edge (reserves space,
   so maximised windows fit around it). Docked, **Sites** lists only the page in focus; tick **Show

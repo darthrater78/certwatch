@@ -394,7 +394,90 @@ public class ProcessFlowTests
         Assert.Equal(PinningSignal.Rejected, row.Pinning);
         tracker.Apply(Key, View("pin.example"), T0, HandshakeOutcome.ClosedAfterHandshake);
         Assert.Equal(PinningSignal.Likely, row.Pinning);
-        Assert.Contains("own trust store", row.EvidenceText);
+        var answer = PinningAssessor.Assess(row, readingHandshakes: true);
+        Assert.Equal(PinningState.Likely, answer.State);
+        Assert.Equal(PinningGroup.NeedsAttention, answer.Group);
+        Assert.Contains("own private trust store", answer.Why);
+    }
+
+    [Fact]
+    public void An_uninspected_connection_is_cant_tell_never_not_pinned()
+    {
+        using var cert = Cert("pin.example");
+        var (_, row) = PinRow(CertWatch.Core.Trust.Verdict.NotInspected, System.Net.Security.SslPolicyErrors.None, cert);
+        var answer = PinningAssessor.Assess(row, readingHandshakes: true);
+        Assert.Equal(PinningState.NotInspected, answer.State);
+        Assert.Equal(PinningGroup.CantTell, answer.Group);
+    }
+
+    [Fact]
+    public void An_untrusted_inspection_root_is_cant_tell_even_after_refusals()
+    {
+        using var cert = Cert("pin.example");
+        var (tracker, row) = PinRow(CertWatch.Core.Trust.Verdict.Inspected, System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors, cert);
+        for (var i = 0; i < ProcessFlowTracker.PinningRefusals; i++) tracker.Apply(Key, View("pin.example"), T0, HandshakeOutcome.Rejected);
+        Assert.Equal(PinningState.RootNotTrusted, PinningAssessor.Assess(row, true).State);
+    }
+
+    [Fact]
+    public void Inspected_without_handshake_reading_says_how_to_find_out()
+    {
+        using var cert = Cert("pin.example");
+        var (_, row) = PinRow(CertWatch.Core.Trust.Verdict.Inspected, System.Net.Security.SslPolicyErrors.None, cert);
+        var answer = PinningAssessor.Assess(row, readingHandshakes: false);
+        Assert.Equal(PinningState.NeedsHandshakeReading, answer.State);
+        Assert.Contains("administrator", answer.Next);
+        Assert.Equal(PinningState.WaitingForConnection, PinningAssessor.Assess(row, readingHandshakes: true).State);
+    }
+
+    [Fact]
+    public void Accepting_an_inspected_certificate_shows_no_sign_of_pinning()
+    {
+        using var cert = Cert("pin.example");
+        var (tracker, row) = PinRow(CertWatch.Core.Trust.Verdict.Inspected, System.Net.Security.SslPolicyErrors.None, cert);
+        tracker.Apply(Key, View("pin.example"), T0, HandshakeOutcome.Accepted);
+        Assert.Equal(PinningState.NoSign, PinningAssessor.Assess(row, true).State);
+    }
+
+    [Fact]
+    public void A_process_handed_a_certificate_from_another_issuer_wasnt_tested()
+    {
+        using var inspected = Cert("proxy.example");
+        using var real = Cert("real.example");
+        var (tracker, row) = PinRow(CertWatch.Core.Trust.Verdict.Inspected, System.Net.Security.SslPolicyErrors.None, inspected);
+        var seen = new TlsHandshakeView(new ClientHelloInfo("pin.example", [], false, false), new ServerHelloInfo(0x0303, 0xC02F), [real.RawData]);
+        for (var i = 0; i < ProcessFlowTracker.PinningRefusals; i++) tracker.Apply(Key, seen, T0, HandshakeOutcome.Rejected);
+        Assert.NotEqual(PinningSignal.Likely, row.Pinning);
+        Assert.Equal(PinningState.NotInspected, PinningAssessor.Assess(row, true).State);
+    }
+
+    [Fact]
+    public void With_all_processes_one_apps_acceptance_cant_hide_anothers_pin()
+    {
+        using var cert = Cert("pin.example");
+        var tracker = new ProcessFlowTracker();
+        var browser = Conn(localPort: 50001) with { ProcessName = "browser" };
+        var pinned = Conn(localPort: 50002) with { ProcessName = "pinnedapp" };
+        tracker.Apply(browser.Key, View("pin.example"), T0, HandshakeOutcome.Accepted, "browser");
+        for (var i = 0; i < ProcessFlowTracker.PinningRefusals; i++)
+            tracker.Apply(pinned.Key, View("pin.example"), T0, HandshakeOutcome.Rejected, "pinnedapp");
+        tracker.Update([browser, pinned], T0);
+
+        Assert.Equal(2, tracker.Destinations.Count);
+        var classification = new CertWatch.Core.Trust.Classification(CertWatch.Core.Trust.Verdict.Inspected, "test", null, "CA", "Root", false, false);
+        foreach (var request in tracker.TakeProbes(T0, 4))
+            tracker.CompleteProbe(request.Destination, Probe("pin.example", cert), classification, null, T0);
+
+        Assert.Equal(PinningSignal.None, tracker.Destinations.Single(d => d.Owner == "browser").Pinning);
+        Assert.Equal(PinningSignal.Likely, tracker.Destinations.Single(d => d.Owner == "pinnedapp").Pinning);
+    }
+
+    [Fact]
+    public void A_non_tls_port_reads_not_checked()
+    {
+        var tracker = new ProcessFlowTracker();
+        tracker.Update([Conn(port: 1433)], T0);
+        Assert.Equal(PinningState.NotChecked, PinningAssessor.Assess(Assert.Single(tracker.Destinations), false).State);
     }
 
     [Fact]
@@ -435,6 +518,48 @@ public class ProcessFlowTests
         assembler.Process(Out(seq, 1000, finished));
         clock.Now += HandshakeAssembler.QuickClose + TimeSpan.FromSeconds(1);
         Assert.Null(assembler.Process(Out(seq + (uint)finished.Length, 1000, [], Fin | Ack)));
+    }
+
+    [Theory]
+    [InlineData("java", "java")]
+    [InlineData("  Java.EXE ", "Java")]
+    [InlineData("\"My App.exe\"", "My App")]
+    [InlineData("app.helper", "app.helper")]
+    public void A_typed_process_name_is_normalized(string typed, string expected) =>
+        Assert.Equal(expected, ProcessNameInput.Normalize(typed));
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("   ")]
+    [InlineData(".exe")]
+    [InlineData("..")]
+    [InlineData(@"C:\Tools\app.exe")]
+    [InlineData("../app")]
+    [InlineData("app*")]
+    [InlineData("app\nname")]
+    public void Text_that_cant_be_a_process_name_is_rejected(string? typed) =>
+        Assert.Null(ProcessNameInput.Normalize(typed));
+
+    [Fact]
+    public void An_overlong_process_name_is_rejected() =>
+        Assert.Null(ProcessNameInput.Normalize(new string('a', ProcessNameInput.MaxLength + 1)));
+
+    [Fact]
+    public void Clearing_resets_counts_and_an_open_connection_returns_with_its_observed_name()
+    {
+        var tracker = new ProcessFlowTracker();
+        var conn = Conn();
+        tracker.Apply(conn.Key, View("app.example"), T0, HandshakeOutcome.Rejected);
+        tracker.Update([conn], T0);
+        tracker.Clear();
+        Assert.Empty(tracker.Destinations);
+
+        tracker.Update([conn], T0);
+        var row = Assert.Single(tracker.Destinations);
+        Assert.Equal("app.example", row.Host);
+        Assert.Equal(HostEvidence.Observed, row.HostEvidence);
+        Assert.Equal(0, row.Refused);
+        Assert.Single(tracker.TakeProbes(T0, 4));
     }
 
     [Fact]

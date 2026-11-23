@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using CertWatch.Core.Browsers;
 using CertWatch.Core.Network;
 using CertWatch.Core.Tls;
@@ -9,7 +11,7 @@ using CertWatch.Core.Trust;
 namespace CertWatch.Core.ProcessFlow;
 
 /// <summary>An established TCP connection of the targeted process, from the OS connection table.</summary>
-public sealed record FlowConnection(IPAddress Local, int LocalPort, IPAddress Remote, int RemotePort, int ProcessId)
+public sealed record FlowConnection(IPAddress Local, int LocalPort, IPAddress Remote, int RemotePort, int ProcessId, string? ProcessName = null)
 {
     public FlowKey Key => new(Local, LocalPort, Remote, RemotePort);
 }
@@ -51,8 +53,10 @@ public enum PinningSignal
 public sealed record FlowProbeRequest(FlowDestination Destination, SiteEndpoint Endpoint, IPAddress Address);
 
 /// <summary>One place the targeted process connects to: an address, a port and, when known, a host name.</summary>
-public sealed class FlowDestination(IPAddress remote, int port, DateTimeOffset now)
+public sealed class FlowDestination(IPAddress remote, int port, DateTimeOffset now, string? owner = null)
 {
+    /// <summary>The app this row belongs to when following all processes, so one app's result can't hide another's.</summary>
+    public string? Owner { get; } = owner;
     public IPAddress Remote { get; } = remote;
     public int Port { get; } = port;
     public string? Host { get; internal set; }
@@ -88,11 +92,26 @@ public sealed class FlowDestination(IPAddress remote, int port, DateTimeOffset n
         get
         {
             if (Refused == 0 || Accepted > 0) return PinningSignal.None;
-            var inspectedAndTrusted = Classification?.Verdict == Verdict.Inspected
-                && Probe is { } probe && !probe.PolicyErrors.HasFlag(SslPolicyErrors.RemoteCertificateChainErrors);
+            var inspectedAndTrusted = Classification?.Verdict == Verdict.Inspected && InspectionTrustedHere && !ProcessGotOtherIssuer;
             return Refused >= ProcessFlowTracker.PinningRefusals && inspectedAndTrusted ? PinningSignal.Likely : PinningSignal.Rejected;
         }
     }
+
+    /// <summary>The Windows trust store accepts the chain CertWatch received.</summary>
+    public bool InspectionTrustedHere => Probe is { } probe && !probe.PolicyErrors.HasFlag(SslPolicyErrors.RemoteCertificateChainErrors);
+
+    /// <summary>
+    /// The process's own TLS 1.2 certificate has a different issuer from CertWatch's, so it wasn't
+    /// handed the same inspection. Issuers are compared because proxies can mint a new leaf per connection.
+    /// </summary>
+    public bool ProcessGotOtherIssuer =>
+        ObservedCertificates.Count > 0 && Probe?.Leaf is { } leaf
+        && (ObservedIssuer is null || !leaf.IssuerName.RawData.AsSpan().SequenceEqual(ObservedIssuer));
+
+    /// <summary>Whether CertWatch can make a handshake here: a routable address on a TLS port or with a real handshake seen.</summary>
+    public bool CanCheck => ProcessFlowTracker.IsCheckable(this);
+
+    internal byte[]? ObservedIssuer { get; set; }
 
     public CertEvidence CertEvidence
     {
@@ -127,13 +146,7 @@ public sealed class FlowDestination(IPAddress remote, int port, DateTimeOffset n
                 HostEvidence.Inferred => " The host is a guess from reverse DNS and may be wrong on a shared address.",
                 _ => " No host name is known, so the server chose which certificate to send.",
             };
-            var pinning = Pinning switch
-            {
-                PinningSignal.Likely => $" Pinning likely: the process refused this inspected certificate {Refused} times even though this PC trusts it. An app with its own trust store behaves the same way; either way it needs an inspection bypass.",
-                PinningSignal.Rejected => $" The process refused the certificate {Refused} time{(Refused == 1 ? "" : "s")}, which isn't enough to indicate pinning.",
-                _ => "",
-            };
-            return cert + host + pinning;
+            return cert + host;
         }
     }
 }
@@ -152,10 +165,16 @@ public sealed class ProcessFlowTracker
     public static readonly TimeSpan RecheckAfter = TimeSpan.FromMinutes(5), RetryAfter = TimeSpan.FromMinutes(1);
     private static readonly int[] TlsPorts = [443, 8443];
 
-    private readonly Dictionary<(IPAddress Remote, int Port, string? Host), FlowDestination> _rows = [];
+    private readonly Dictionary<(IPAddress Remote, int Port, string? Host, string? Owner), FlowDestination> _rows = [];
     private readonly Dictionary<FlowKey, string> _hostByFlow = [];
 
     public IReadOnlyCollection<FlowDestination> Destinations => _rows.Values;
+
+    /// <summary>
+    /// Empties the list and its accepted and refused counts. Connections still open come back on the
+    /// next read, keeping any host name already read from their handshake.
+    /// </summary>
+    public void Clear() => _rows.Clear();
 
     /// <summary>Applies a fresh read of the connection table.</summary>
     public void Update(IEnumerable<FlowConnection> connections, DateTimeOffset now)
@@ -167,24 +186,24 @@ public sealed class ProcessFlowTracker
             var key = Normalize(c.Key);
             live.Add(key);
             var host = _hostByFlow.GetValueOrDefault(key);
-            if (GetOrAdd(key.Remote, key.RemotePort, host, now) is not { } row) continue;
+            if (GetOrAdd(key.Remote, key.RemotePort, host, now, c.ProcessName) is not { } row) continue;
             row.OpenConnections++;
             row.LastSeen = now;
         }
         foreach (var gone in _hostByFlow.Keys.Where(k => !live.Contains(k)).ToList()) _hostByFlow.Remove(gone);
         // A connection that moved to a named row leaves nothing behind on the unnamed one.
-        foreach (var stale in _rows.Where(r => r.Key.Host is null && r.Value.OpenConnections == 0 && HasNamedRow(r.Key.Remote, r.Key.Port)).Select(r => r.Key).ToList())
+        foreach (var stale in _rows.Where(r => r.Key.Host is null && r.Value.OpenConnections == 0 && HasNamedRow(r.Key.Remote, r.Key.Port, r.Key.Owner)).Select(r => r.Key).ToList())
             _rows.Remove(stale);
     }
 
     /// <summary>Applies what a connection's own handshake showed.</summary>
-    public void Apply(FlowKey connection, TlsHandshakeView view, DateTimeOffset now, HandshakeOutcome outcome = HandshakeOutcome.Unknown)
+    public void Apply(FlowKey connection, TlsHandshakeView view, DateTimeOffset now, HandshakeOutcome outcome = HandshakeOutcome.Unknown, string? owner = null)
     {
         var key = Normalize(connection);
         var host = view.Client?.ServerName;
         if (host is not null) _hostByFlow[key] = host;
         else host = _hostByFlow.GetValueOrDefault(key);
-        if (GetOrAdd(key.Remote, key.RemotePort, host, now) is not { } row) return;
+        if (GetOrAdd(key.Remote, key.RemotePort, host, now, owner) is not { } row) return;
 
         row.HandshakeSeen = true;
         row.LastSeen = now;
@@ -200,7 +219,11 @@ public sealed class ProcessFlowTracker
             row.EncryptedClientHello = client.HasEncryptedClientHello;
         }
         if (view.Server is { } server) row.ObservedVersion = server.Version;
-        if (view.CertificateVisible) row.ObservedCertificates = view.ServerCertificates;
+        if (view.CertificateVisible)
+        {
+            row.ObservedCertificates = view.ServerCertificates;
+            row.ObservedIssuer = IssuerOf(view.ServerCertificates[0]);
+        }
         if (outcome == HandshakeOutcome.Accepted) row.Accepted++;
         else if (outcome is HandshakeOutcome.Rejected or HandshakeOutcome.ClosedAfterHandshake) row.Refused++;
     }
@@ -248,14 +271,36 @@ public sealed class ProcessFlowTracker
         row.Egress = egress;
     }
 
-    private bool HasNamedRow(IPAddress remote, int port) => _rows.Keys.Any(k => k.Host is not null && k.Port == port && k.Remote.Equals(remote));
-
-    private FlowDestination? GetOrAdd(IPAddress remote, int port, string? host, DateTimeOffset now)
+    // The bytes came off the network: a malformed certificate simply has no known issuer.
+    private static byte[]? IssuerOf(byte[] der)
     {
-        var key = (remote, port, host);
+        try
+        {
+            using var cert = X509CertificateLoader.LoadCertificate(der);
+            return cert.IssuerName.RawData;
+        }
+        catch (CryptographicException)
+        {
+            return null;
+        }
+    }
+
+    private bool HasNamedRow(IPAddress remote, int port, string? owner) =>
+        _rows.Keys.Any(k => k.Host is not null && k.Port == port && k.Owner == owner && k.Remote.Equals(remote));
+
+    private FlowDestination? GetOrAdd(IPAddress remote, int port, string? host, DateTimeOffset now, string? owner)
+    {
+        var key = (remote, port, host, owner);
         if (_rows.TryGetValue(key, out var row)) return row;
         if (_rows.Count >= MaxDestinations && !EvictOldestClosed()) return null;
-        row = new FlowDestination(remote, port, now);
+        row = new FlowDestination(remote, port, now, owner);
+        if (host is not null)
+        {
+            // Only names read from a real handshake are row keys, including after the list is cleared.
+            row.Host = host;
+            row.HostEvidence = HostEvidence.Observed;
+            row.HandshakeSeen = true;
+        }
         _rows[key] = row;
         return row;
     }
@@ -267,7 +312,7 @@ public sealed class ProcessFlowTracker
         return closed.Count > 0;
     }
 
-    private static bool IsCheckable(FlowDestination row) =>
+    internal static bool IsCheckable(FlowDestination row) =>
         IsRoutable(row.Remote) && (row.HandshakeSeen || TlsPorts.Contains(row.Port));
 
     private static bool IsRoutable(IPAddress a)

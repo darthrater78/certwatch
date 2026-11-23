@@ -129,7 +129,7 @@ internal sealed class ProcessFlowSession : IDisposable
             var owner = TcpConnections.FlowsFor(_pids).FirstOrDefault(c => c.LocalPort == key.LocalPort && c.RemotePort == key.RemotePort
                 && Same(c.Remote, key.Remote) && Same(c.Local, key.Local));
             if (owner is null) return false;
-            if (!_target.AllProcesses) return true;
+            if (!TracksOwners) return true;
             if (_ownerByFlow.Count >= MaxOwnedFlows) _ownerByFlow.Clear();
             _ownerByFlow[key] = NameOf(owner.ProcessId);
             return true;
@@ -146,9 +146,12 @@ internal sealed class ProcessFlowSession : IDisposable
     {
         string? owner = null;
         // Without a known owner the result can't be attributed to an app, so it isn't counted.
-        if (_target.AllProcesses && !_ownerByFlow.TryGetValue(update.Key, out owner)) return;
+        if (TracksOwners && !_ownerByFlow.TryGetValue(update.Key, out owner)) return;
         lock (_gate) _tracker.Apply(update.Key, update.View, DateTimeOffset.UtcNow, update.Outcome, owner);
     }
+
+    // One name can cover different programs, so anything wider than a single PID keeps results per exe.
+    private bool TracksOwners => _target.AllProcesses || _target.AllNamed;
 
     private ProcessIdentity IdentityOf(int pid) => _names.GetOrAdd(pid, static id => ProcessIdentityReader.Read(id));
 
@@ -197,12 +200,12 @@ internal sealed class ProcessFlowSession : IDisposable
         var now = DateTimeOffset.UtcNow;
         var pids = ResolvePids();
         _pids = pids;
-        if (!_target.AllProcesses && pids.Count > 0) _targetIdentity = IdentityOf(pids.Min());
+        if (!TracksOwners && pids.Count > 0) _targetIdentity = IdentityOf(pids.Min());
         List<FlowConnection> connections;
         try
         {
             connections = TcpConnections.FlowsFor(pids);
-            if (_target.AllProcesses) connections = NameConnections(connections, pids);
+            if (TracksOwners) connections = NameConnections(connections, pids);
         }
         catch (Exception ex) when (ex is ExternalException or InvalidOperationException)
         {
@@ -235,7 +238,8 @@ internal sealed class ProcessFlowSession : IDisposable
     private List<FlowConnection> NameConnections(List<FlowConnection> connections, HashSet<int> pids)
     {
         foreach (var gone in _names.Keys.Where(id => !pids.Contains(id)).ToList()) _names.TryRemove(gone, out _);
-        return connections.Where(c => !IPAddress.IsLoopback(c.Remote)).Select(c => c with { ProcessName = NameOf(c.ProcessId) }).ToList();
+        return connections.Where(c => !_target.AllProcesses || !IPAddress.IsLoopback(c.Remote))
+            .Select(c => c with { ProcessName = NameOf(c.ProcessId) }).ToList();
     }
 
     private static HashSet<int> AllConnectedProcesses()

@@ -16,15 +16,16 @@ public sealed record ProcessIdentity(string ProcessName, string Exe, string? Pro
 
     public string Label => Product is null ? Exe : $"{Product} ({Exe})";
 
-    public static ProcessIdentity From(string processName, string? imagePath, string? description)
+    public static ProcessIdentity From(string processName, string? imagePath, string? description, string? productName = null)
     {
         var name = Clean(processName) ?? "Unknown";
         var exe = Clean(FileNameOf(imagePath)) ?? $"{name}.exe";
-        var product = Clean(description);
-        // A description that only repeats the name adds nothing.
-        if (product is not null && (product.Equals(name, StringComparison.OrdinalIgnoreCase) || product.Equals(exe, StringComparison.OrdinalIgnoreCase)))
-            product = null;
-        return new ProcessIdentity(name, exe, product);
+        // A field that only repeats the name adds nothing, so the next one gets a turn.
+        string? Useful(string? text) =>
+            Clean(text) is { } value && !value.Equals(name, StringComparison.OrdinalIgnoreCase) && !value.Equals(exe, StringComparison.OrdinalIgnoreCase)
+                ? value
+                : null;
+        return new ProcessIdentity(name, exe, Useful(description) ?? Useful(productName));
     }
 
     private static string? FileNameOf(string? path)

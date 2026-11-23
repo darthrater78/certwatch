@@ -493,6 +493,25 @@ public class ProcessFlowTests
         Assert.Equal("tool.exe", id.Label);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("claude")]
+    [InlineData("claude.exe")]
+    public void The_product_name_is_used_when_the_description_adds_nothing(string? description)
+    {
+        var id = ProcessIdentity.From("claude", @"C:\Tools\claude.exe", description, "Claude Code");
+        Assert.Equal("Claude Code (claude.exe)", id.Label);
+    }
+
+    [Fact]
+    public void Two_exes_with_one_process_name_keep_separate_identities()
+    {
+        var desktop = ProcessIdentity.From("Claude", @"C:\Apps\Claude.exe", "Claude", "Claude");
+        var code = ProcessIdentity.From("claude", @"C:\Tools\claude.exe", "Claude Code", "Claude Code");
+        Assert.Equal("Claude.exe", desktop.Label);
+        Assert.Equal("Claude Code (claude.exe)", code.Label);
+    }
+
     [Fact]
     public void A_process_windows_wont_describe_falls_back_to_its_name() =>
         Assert.Equal("lsass.exe", ProcessIdentity.From("lsass", null, null).Exe);

@@ -59,7 +59,8 @@ starts or drives a browser. The details, checkable against the code, are under
 **Process flow…** in the header targets a process and lists where it connects, with the path and
 certificate chain for each destination. Pick **All processes**, pick one with open connections, or type its name under
 **Add by name** (`java` or `app.exe`). A named process doesn't need to be running yet, so you can
-press **Start** first and catch its first handshakes when it launches. Added names last until the
+press **Start** first and catch its first handshakes when it launches. If different programs share
+that name, each exe gets its own rows. Added names last until the
 window closes. **Clear list** empties the results and their accepted and refused counts; connections
 still open reappear. Every row says how it knows what it shows:
 

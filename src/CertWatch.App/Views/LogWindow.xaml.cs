@@ -58,6 +58,7 @@ public partial class LogWindow : Window
     {
         Directory.CreateDirectory(LogService.LogDirectory);
         // explorer.exe with a folder path we built ourselves (no user input).
-        Process.Start(new ProcessStartInfo("explorer.exe", $"\"{LogService.LogDirectory}\"") { UseShellExecute = false });
+        // By full path: a bare name would also search CertWatch's own folder, which matters when it runs elevated.
+        Process.Start(new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe"), $"\"{LogService.LogDirectory}\"") { UseShellExecute = false });
     }
 }

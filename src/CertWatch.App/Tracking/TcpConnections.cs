@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Net;
 using System.Runtime.InteropServices;
 using CertWatch.Core.Network;
+using CertWatch.Core.ProcessFlow;
 
 namespace CertWatch.App.Tracking;
 
@@ -35,6 +36,54 @@ internal static partial class TcpConnections
         if (Read(AF_INET6) is { } v6) Parse(v6, Row6Size, ParseRow6, processIds, result);
         return result;
     }
+
+    /// <summary>Established connections of these processes with both ends, for matching a handshake to its owner.</summary>
+    public static List<FlowConnection> FlowsFor(IReadOnlySet<int> processIds)
+    {
+        var result = new List<FlowConnection>();
+        if (processIds.Count == 0) return result;
+        if (Read(AF_INET) is { } v4) ForEachRow(v4, Row4Size, r => AddFlow(ParseFlow4(r), processIds, result));
+        if (Read(AF_INET6) is { } v6) ForEachRow(v6, Row6Size, r => AddFlow(ParseFlow6(r), processIds, result));
+        return result;
+    }
+
+    /// <summary>How many established connections each process holds (process ids and counts only).</summary>
+    public static Dictionary<int, int> CountsByProcess()
+    {
+        var counts = new Dictionary<int, int>();
+        void Count(uint state, int pid)
+        {
+            if (state == MIB_TCP_STATE_ESTAB) counts[pid] = counts.GetValueOrDefault(pid) + 1;
+        }
+        if (Read(AF_INET) is { } v4) ForEachRow(v4, Row4Size, r => Count(BinaryPrimitives.ReadUInt32LittleEndian(r), (int)BinaryPrimitives.ReadUInt32LittleEndian(r.Slice(20, 4))));
+        if (Read(AF_INET6) is { } v6) ForEachRow(v6, Row6Size, r => Count(BinaryPrimitives.ReadUInt32LittleEndian(r.Slice(48, 4)), (int)BinaryPrimitives.ReadUInt32LittleEndian(r.Slice(52, 4))));
+        return counts;
+    }
+
+    private delegate void RowAction(ReadOnlySpan<byte> row);
+
+    private static void ForEachRow(byte[] table, int rowSize, RowAction action)
+    {
+        var count = BinaryPrimitives.ReadUInt32LittleEndian(table);
+        var max = (table.Length - 4) / rowSize;
+        for (var i = 0; i < Math.Min(count, (uint)max); i++) action(table.AsSpan(4 + i * rowSize, rowSize));
+    }
+
+    private static void AddFlow((uint State, FlowConnection Flow) row, IReadOnlySet<int> pids, List<FlowConnection> into)
+    {
+        if (row.State == MIB_TCP_STATE_ESTAB && pids.Contains(row.Flow.ProcessId)) into.Add(row.Flow);
+    }
+
+    private static (uint, FlowConnection) ParseFlow4(ReadOnlySpan<byte> r) => (
+        BinaryPrimitives.ReadUInt32LittleEndian(r),
+        new FlowConnection(new IPAddress(r.Slice(4, 4)), Port(r.Slice(8, 4)), new IPAddress(r.Slice(12, 4)), Port(r.Slice(16, 4)),
+            (int)BinaryPrimitives.ReadUInt32LittleEndian(r.Slice(20, 4))));
+
+    private static (uint, FlowConnection) ParseFlow6(ReadOnlySpan<byte> r) => (
+        BinaryPrimitives.ReadUInt32LittleEndian(r.Slice(48, 4)),
+        new FlowConnection(new IPAddress(r[..16], BinaryPrimitives.ReadUInt32LittleEndian(r.Slice(16, 4))), Port(r.Slice(20, 4)),
+            new IPAddress(r.Slice(24, 16), BinaryPrimitives.ReadUInt32LittleEndian(r.Slice(40, 4))), Port(r.Slice(44, 4)),
+            (int)BinaryPrimitives.ReadUInt32LittleEndian(r.Slice(52, 4))));
 
     private static byte[]? Read(int family)
     {

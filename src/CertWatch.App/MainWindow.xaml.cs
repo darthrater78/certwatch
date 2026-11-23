@@ -44,6 +44,7 @@ public partial class MainWindow : Window
     // Browser|site pairs already announced as steered to ZTNA (not inspected) this session.
     private readonly HashSet<string> _announcedSteered = [];
     private LogWindow? _logWindow;
+    private ProcessFlowWindow? _processFlowWindow;
     private DockController? _dock;
     // Set while the foreground browser changes the selected tab, so the dock keeps that exact window.
     private bool _selectingFromForeground;
@@ -374,6 +375,7 @@ public partial class MainWindow : Window
         var menu = new ContextMenu();
         menu.Items.Add(Item("_Browsers…", false, ChooseBrowsers));
         menu.Items.Add(Item("Clear _all…", false, () => OnClearAll(this, new RoutedEventArgs())));
+        menu.Items.Add(Item("_Process flow…", false, () => OnProcessFlow(this, new RoutedEventArgs())));
         menu.Items.Add(Item("_Log", false, () => OnLog(this, new RoutedEventArgs())));
         // Pop-ups are off while docked; the duration still applies once CertWatch floats again.
         menu.Items.Add(new MenuItem { Header = "Pop-ups: off while docked", IsEnabled = false });
@@ -537,6 +539,17 @@ public partial class MainWindow : Window
         _shell.ThemeText = $"Theme: {ThemeManager.Mode}";
     }
 
+    private void OnProcessFlow(object sender, RoutedEventArgs e)
+    {
+        if (_processFlowWindow is null)
+        {
+            _processFlowWindow = new ProcessFlowWindow(_probe, _classifier, _routes);
+            _processFlowWindow.Closed += (_, _) => _processFlowWindow = null;
+            _processFlowWindow.Show();
+        }
+        else _processFlowWindow.Activate();
+    }
+
     private void OnLog(object sender, RoutedEventArgs e)
     {
         if (_logWindow is null)
@@ -558,7 +571,8 @@ public partial class MainWindow : Window
     private static void OpenOwnLink(Uri uri)
     {
         if (uri.Scheme == Uri.UriSchemeHttps && uri.AbsoluteUri.StartsWith(ShellViewModel.Repository, StringComparison.Ordinal))
-            Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+            // Through the shell's explorer, so a CertWatch started as administrator never opens an elevated browser.
+            Process.Start(new ProcessStartInfo(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe"), $"\"{uri.AbsoluteUri}\"") { UseShellExecute = false });
     }
 
     /// <summary>A pop-up was clicked: bring CertWatch forward on that browser's tab with the site selected.</summary>
@@ -604,6 +618,7 @@ public partial class MainWindow : Window
         _tray.Dispose();
         _history.Dispose();
         _logWindow?.Close();
+        _processFlowWindow?.Close();
         Close();
         Application.Current.Shutdown();
     }

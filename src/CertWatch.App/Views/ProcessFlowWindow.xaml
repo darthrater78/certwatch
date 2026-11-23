@@ -1,0 +1,108 @@
+<Window x:Class="CertWatch.App.Views.ProcessFlowWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="CertWatch process flow" Width="1120" Height="680" MinWidth="720" MinHeight="420" Icon="../Assets/CertWatch.ico"
+        Background="{DynamicResource Ground}" Foreground="{DynamicResource OnSurface}"
+        FontFamily="{StaticResource UiFont}" FontSize="13">
+    <Window.Resources>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource Surface}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="4"/>
+        </Style>
+    </Window.Resources>
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Background="{DynamicResource SurfaceAlt}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Padding="12,8">
+            <StackPanel>
+                <DockPanel LastChildFill="True">
+                    <TextBlock Text="Process" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <Button DockPanel.Dock="Right" x:Name="StartButton" Style="{StaticResource PrimaryButtonStyle}" Content="_Start" Click="OnStartStop" MinWidth="72" Margin="6,0,0,0"/>
+                    <Button DockPanel.Dock="Right" Style="{StaticResource SmallButton}" Content="_Refresh list" Click="OnRefresh" Margin="6,0,0,0"/>
+                    <CheckBox DockPanel.Dock="Right" x:Name="AllNamedBox" Content="All processes of this _name" IsChecked="True" VerticalAlignment="Center" Margin="12,0,6,0"
+                              ToolTip="Browsers and many apps use several processes, and the network one is often not the one with the window"/>
+                    <Button x:Name="ProcessButton" Content="Choose a process…" HorizontalContentAlignment="Left" Click="OnChooseProcess"
+                            AutomationProperties.Name="Process to follow"/>
+                </DockPanel>
+                <DockPanel Margin="0,8,0,0" LastChildFill="True">
+                    <CheckBox x:Name="CaptureBox" Content="Read this process's _handshakes" Click="OnCapture" VerticalAlignment="Center" Margin="0,0,12,0"
+                              AutomationProperties.Name="Read this process's TLS handshakes"/>
+                    <TextBlock x:Name="CaptureHint" Style="{StaticResource Muted}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                </DockPanel>
+            </StackPanel>
+        </Border>
+        <Border DockPanel.Dock="Bottom" Background="{DynamicResource SurfaceAlt}" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="12,4">
+            <TextBlock x:Name="StatusText" Style="{StaticResource Muted}" TextTrimming="CharacterEllipsis"/>
+        </Border>
+        <Grid Margin="12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="3*" MinHeight="120"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="2*" MinHeight="130"/>
+            </Grid.RowDefinitions>
+            <Border Style="{StaticResource Card}">
+                <Grid>
+                    <DataGrid x:Name="Flows" SelectionChanged="OnSelected" AutomationProperties.Name="Where the process connects">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="2*" FontWeight="SemiBold"/>
+                            <DataGridTemplateColumn Header="Result" Width="Auto" SortMemberPath="Chip">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource StatusChip}">
+                                            <TextBlock Text="{Binding Chip}" Style="{StaticResource StatusInk}" FontSize="11"/>
+                                        </Border>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="Process response" Binding="{Binding Reaction}" Width="Auto"/>
+                            <DataGridTextColumn Header="Name from" Binding="{Binding HostSource}" Width="Auto"/>
+                            <DataGridTextColumn Header="Address" Binding="{Binding Remote}" Width="Auto" FontFamily="{StaticResource MonoFont}" FontSize="12"/>
+                            <DataGridTextColumn Header="TLS" Binding="{Binding Tls}" Width="Auto"/>
+                            <DataGridTextColumn Header="Issuer" Binding="{Binding Issuer}" Width="2*"/>
+                            <DataGridTextColumn Header="Egress" Binding="{Binding PathText}" Width="2*"/>
+                            <DataGridTextColumn Header="Open" Binding="{Binding Open}" Width="Auto"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    <TextBlock x:Name="EmptyText" Style="{StaticResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"
+                               Text="Choose a process and press Start."/>
+                </Grid>
+            </Border>
+            <TextBlock Grid.Row="1" Text="Certificate flow" Style="{StaticResource SectionTitle}" Margin="0,12,0,6"/>
+            <Border Grid.Row="2" Style="{StaticResource Card}" Padding="12">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Bottom" x:Name="EvidenceText" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,8,0,0"
+                               Text="Select a row to see its path and certificate chain."/>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl x:Name="NodesList" AutomationProperties.Name="Certificate flow steps">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                        <Rectangle Width="18" Height="2" Fill="{DynamicResource LineStrong}" VerticalAlignment="Center">
+                                            <Rectangle.Style>
+                                                <Style TargetType="Rectangle">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsFirst}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Rectangle.Style>
+                                        </Rectangle>
+                                        <Border Background="{DynamicResource SurfaceAlt}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="4" Padding="8,4" MaxWidth="280">
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Role}" Style="{StaticResource Label}"/>
+                                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Title}"/>
+                                                <TextBlock Text="{Binding Detail}" Style="{StaticResource Muted}" FontSize="11" TextTrimming="CharacterEllipsis" ToolTip="{Binding Detail}"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </DockPanel>
+</Window>

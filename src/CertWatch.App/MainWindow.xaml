@@ -49,6 +49,8 @@
                         ToolTip="How long pop-ups stay: until dismissed, 10 s, 30 s or 1 min"/>
                 <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}" Content="_Log" Click="OnLog"
                         ToolTip="Open the log, with debug options"/>
+                <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}" Content="_Process flow…" Click="OnProcessFlow"
+                        ToolTip="Choose a running process and see where it connects and which certificates are involved"/>
                 <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}" Content="Clear _all…" Click="OnClearAll"
                         ToolTip="Clear every site's history in every browser, and the log"/>
                 <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}" Content="_Browsers…" Click="OnBrowsers"

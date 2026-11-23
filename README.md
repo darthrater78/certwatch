@@ -12,9 +12,10 @@ site). It calls out changes in pop-ups, flags mTLS sites, and keeps an encrypted
 ## How it works: it watches, it never intercepts
 
 > [!IMPORTANT]
-> **CertWatch is not in the browser's path.** It doesn't proxy, decrypt, capture or alter any
-> browser traffic. The browser's own connections never pass through CertWatch, and it can't see
-> what they contain.
+> **CertWatch is not in the browser's path.** It never proxies, intercepts, decrypts or alters
+> traffic, and connections never pass through it. It reads handshakes only if you start CertWatch as
+> administrator and turn on **Read this process's handshakes** in **Process flow**; that reads the
+> cleartext TLS handshake of the one process you chose, in memory, and nothing else.
 
 What CertWatch actually does, in order:
 
@@ -51,6 +52,26 @@ separate connection from another app doesn't see. CertWatch now notices this cas
 PAC, route or registry setting, injects nothing into any process, hooks no keyboard input, and never
 starts or drives a browser. The details, checkable against the code, are under
 [Security architecture](#security-architecture).
+
+## Process flow
+
+**Process flow…** in the header targets any running process with open connections and lists where
+it connects, with the path and certificate chain for each destination. Every row says how it knows
+what it shows:
+
+| | Without admin (default) | Started as administrator, handshake reading on |
+|---|---|---|
+| **Connections** | Windows' connection table | The same |
+| **Host name** | **Inferred** from reverse DNS, which can be wrong on shared addresses | **Observed** in the process's ClientHello, for connections opened after you turn it on (IPv4) |
+| **TLS 1.2 certificate** | CertWatch's own handshake | The certificate the process actually received |
+| **TLS 1.3 certificate** | CertWatch's own handshake | CertWatch's own handshake to the same address and host, because TLS 1.3 encrypts it |
+
+If a process received a different certificate from the one CertWatch's own handshake got, the row
+reads **Different cert**. With handshake reading on, **Process response** counts the connections it
+accepted and refused, and repeated refusal of a trusted inspected certificate reads **Pinning
+likely** (see [How it decides](#how-it-decides)). CertWatch's own handshakes go only to routable addresses on ports 443 and
+8443, or a port where a real TLS handshake was seen, so non-TLS services aren't contacted.
+QUIC/HTTP/3 runs over UDP and isn't listed. Results stay in memory and aren't added to history.
 
 ## Screenshots
 
@@ -194,12 +215,18 @@ a steered mTLS site that isn't inspected reads **Steered to ZTNA · not inspecte
 bypass)**, because an inspecting proxy can't present your client certificate. Servers that ask for
 one only later in the connection (TLS 1.3 post-handshake authentication) aren't detected.
 
-**Certificate pinning isn't detected, by design.** Pinning is a check inside the client, not
-something a server shows, so no outside connection can see it. In browsers it doesn't block
-inspection: dynamic pinning (HPKP) was removed in 2018, and Chrome and Edge skip their built-in pins
-for certificates from a locally installed root, which is what inspecting proxies use. A browser site
-that isn't inspected is bypassed by a rule, not by pinning. Desktop apps that pin (and fail when
-inspected) aren't browsers, so CertWatch doesn't follow them.
+**Certificate pinning is identified by behaviour, in Process flow only.** Pinning is a check inside
+the client, not something a server shows, so CertWatch's own connection can't see it. In browsers it
+doesn't block inspection: dynamic pinning (HPKP) was removed in 2018, and Chrome and Edge skip their
+built-in pins for certificates from a locally installed root, which is what inspecting proxies use.
+A browser site that isn't inspected is bypassed by a rule, not by pinning. For desktop apps, turn on
+handshake reading in [Process flow](#process-flow): a row reads **Pinning likely** when the process
+refused an inspected certificate this PC trusts at least 3 times and never accepted one at that
+destination. A refusal is an alert, a close before the handshake finishes, or finishing and closing
+within 2 seconds without sending data. This is strong evidence, not proof: an app with its own private trust store
+(common with Java, Python and Node) behaves the same way, and either case needs an inspection bypass.
+Below the threshold, the row shows only the **Refused** count. Pinning can't be identified without
+handshake reading, or for traffic it can't see (IPv6 and QUIC).
 
 The check is CertWatch's own connection from this machine, along the same route the browser's
 traffic takes. A browser that routes or inspects its own traffic differently (for example, through
@@ -294,7 +321,19 @@ How CertWatch is built with regard to security, in statements you can check agai
   host (from the window title, checked as a host name), the SHA-256 fingerprint (64 hex digits) and
   the issuer's two names, capped in length. It never clicks, focuses or switches tabs in it. These
   readings stay in memory and aren't saved to history.
-- **Privileges.** Runs as the signed-in user (`asInvoker`), never elevated. It writes only under
+- **Process flow reads connections and, if you turn it on, handshakes.** It reads the targeted
+  process's rows from the TCP connection table, looks up reverse DNS for unnamed addresses, and makes
+  its own TLS handshakes (at most 4 at a time) to routable addresses on TLS ports. **Read this
+  process's handshakes** is off by default and needs CertWatch started as administrator. It opens a
+  read-only raw IPv4 socket per local address (`SIO_RCVALL` at IP level, not promiscuous), checks the
+  owner of each new ClientHello against the connection table, and drops every other connection's
+  bytes immediately. For the chosen process it keeps only the cleartext handshake, capped at 64 KB
+  per direction, then discards it. Packet data is parsed as untrusted, never written to disk, and
+  can't be used to block, change or inject traffic. Results are kept in memory only.
+- **Privileges.** Runs as the signed-in user (`asInvoker`) and never asks to elevate. If you start it
+  as administrator yourself, the whole app runs elevated, and that also enables handshake reading.
+  Links and folders still open through Windows Explorer by its full path, so no elevated browser starts.
+  It writes only under
   `%LOCALAPPDATA%\CertWatch` (plus an exported root, wherever you choose to save it), and nothing
   to the registry; it reads one registry value, your Windows light/dark setting, on first run. P/Invoke calls load system DLLs from
   System32 only.
@@ -315,7 +354,8 @@ How CertWatch is built with regard to security, in statements you can check agai
   - `logs\certwatch-<date>.log`: written **only** when you turn on **Write log to file**. Plain text,
     and it names the sites you visit, so it's off by default; **Clear log** and **Clear all**
     delete these files. Without it, the log lives only in memory (last 5,000 entries).
-- **Network exposure.** CertWatch listens on nothing. Outbound, it makes one TLS handshake per site
+- **Network exposure.** CertWatch accepts no connections. The optional handshake reading above
+  receives copies of packets but never answers them. Outbound, it makes one TLS handshake per site
   you visit, through the system proxy when one is set. For an enterprise browser whose check came
   back inspected, it also makes the same handshake to up to 8 addresses the browser is
   already connected to (directly, no proxy), so the site's name is sent as SNI to those servers,
@@ -334,6 +374,9 @@ How CertWatch is built with regard to security, in statements you can check agai
 
 ### Changes
 
+- 2026-11-23: Process flow. New opt-in view of one process's connections. Optional handshake reading
+  (administrator only, off by default) adds a passive raw-socket read scoped to that process, with
+  capped, bounds-checked parsing of untrusted packets and nothing written to disk.
 - 2026-11-18: Enterprise browsers' own path. For an enterprise browser on a tunnelled result,
   CertWatch makes its read-only handshake to up to 8 direct addresses the browser is connected to
   (SNI = the site, no proxy) to see the certificate on the browser's own path. Nothing new listens,

@@ -6,12 +6,16 @@ using CertWatch.Core.ProcessFlow;
 
 namespace CertWatch.App.Tracking;
 
+/// <summary>What handshake reading has seen, so an empty result can be told from a blind capture.</summary>
+internal sealed record CaptureStats(int Adapters, long Packets, long TlsConnections, long Followed);
+
 /// <summary>
 /// Optional, off by default, and only possible when CertWatch was started as administrator. Reads a
 /// copy of IPv4 packets (a raw socket with SIO_RCVALL at IP level, so the adapter isn't put in
 /// promiscuous mode) and hands them straight to a <see cref="HandshakeAssembler"/>, which keeps only
 /// the cleartext handshake of the targeted process's connections. It can't block, alter or inject
-/// traffic, holds no keys, and writes no packets anywhere.
+/// traffic, holds no keys, and writes no packets anywhere. Follows addresses as they come and go,
+/// since a ZTNA client turning on or off adds and removes an adapter.
 /// </summary>
 internal sealed class RawHandshakeCapture : IDisposable
 {
@@ -21,9 +25,11 @@ internal sealed class RawHandshakeCapture : IDisposable
     private readonly HandshakeAssembler _assembler;
     private readonly Action<HandshakeUpdate> _onUpdate;
     private readonly Action<string> _onError;
-    private readonly List<Socket> _sockets = [];
+    private readonly Dictionary<IPAddress, Socket> _sockets = [];
     private readonly CancellationTokenSource _stop = new();
     private readonly Lock _gate = new();
+    private readonly Lock _socketGate = new();
+    private volatile bool _stopped;
 
     public RawHandshakeCapture(Func<FlowKey, bool> isTarget, Action<HandshakeUpdate> onUpdate, Action<string> onError)
     {
@@ -41,44 +47,87 @@ internal sealed class RawHandshakeCapture : IDisposable
         }
     }
 
+    public CaptureStats Stats
+    {
+        get
+        {
+            int adapters;
+            lock (_socketGate) adapters = _sockets.Count;
+            lock (_gate) return new CaptureStats(adapters, _assembler.PacketsSeen, _assembler.ClientHellosSeen, _assembler.ConnectionsFollowed);
+        }
+    }
+
     /// <summary>Opens one socket per local IPv4 address. Returns null on success, or why it couldn't start.</summary>
     public string? Start()
     {
-        string? lastError = null;
-        foreach (var address in LocalAddresses())
+        var lastError = SyncSockets();
+        lock (_socketGate)
         {
-            var socket = new Socket(AddressFamily.InterNetwork, SocketType.Raw, ProtocolType.IP);
-            try
-            {
-                socket.Bind(new IPEndPoint(address, 0));
-                socket.IOControl(IOControlCode.ReceiveAll, BitConverter.GetBytes(RcvAllIpLevel), new byte[4]);
-                _sockets.Add(socket);
-            }
-            catch (SocketException ex)
-            {
-                lastError = ex.Message;
-                socket.Dispose();
-            }
+            if (_sockets.Count == 0) return lastError ?? "No IPv4 network address to read from.";
         }
-        if (_sockets.Count == 0) return lastError ?? "No IPv4 network address to read from.";
-        foreach (var socket in _sockets) _ = Task.Run(() => ReadLoopAsync(socket));
+        NetworkChange.NetworkAddressChanged += OnAddressChanged;
         return null;
     }
 
-    private static List<IPAddress> LocalAddresses() => NetworkInterface.GetAllNetworkInterfaces()
+    private void OnAddressChanged(object? sender, EventArgs e)
+    {
+        if (_stopped) return;
+        try
+        {
+            SyncSockets();
+        }
+        catch (NetworkInformationException ex)
+        {
+            _onError(ex.Message);
+        }
+    }
+
+    // Closes sockets for addresses that are gone and opens them for new ones.
+    private string? SyncSockets()
+    {
+        var current = LocalAddresses();
+        string? lastError = null;
+        lock (_socketGate)
+        {
+            if (_stopped) return null;
+            foreach (var gone in _sockets.Keys.Where(a => !current.Contains(a)).ToList())
+            {
+                _sockets[gone].Dispose();
+                _sockets.Remove(gone);
+            }
+            foreach (var address in current.Where(a => !_sockets.ContainsKey(a)))
+            {
+                var socket = new Socket(AddressFamily.InterNetwork, SocketType.Raw, ProtocolType.IP);
+                try
+                {
+                    socket.Bind(new IPEndPoint(address, 0));
+                    socket.IOControl(IOControlCode.ReceiveAll, BitConverter.GetBytes(RcvAllIpLevel), new byte[4]);
+                    _sockets[address] = socket;
+                    _ = Task.Run(() => ReadLoopAsync(address, socket));
+                }
+                catch (SocketException ex)
+                {
+                    lastError = ex.Message;
+                    socket.Dispose();
+                }
+            }
+        }
+        return lastError;
+    }
+
+    private static HashSet<IPAddress> LocalAddresses() => NetworkInterface.GetAllNetworkInterfaces()
         .Where(n => n.OperationalStatus == OperationalStatus.Up && n.NetworkInterfaceType != NetworkInterfaceType.Loopback)
         .SelectMany(n => n.GetIPProperties().UnicastAddresses)
         .Select(u => u.Address)
         .Where(a => a.AddressFamily == AddressFamily.InterNetwork)
-        .Distinct()
-        .ToList();
+        .ToHashSet();
 
-    private async Task ReadLoopAsync(Socket socket)
+    private async Task ReadLoopAsync(IPAddress address, Socket socket)
     {
         var buffer = new byte[BufferSize];
         try
         {
-            while (!_stop.IsCancellationRequested)
+            while (!_stopped)
             {
                 var length = await socket.ReceiveAsync(buffer, SocketFlags.None, _stop.Token);
                 HandshakeUpdate? update;
@@ -92,19 +141,37 @@ internal sealed class RawHandshakeCapture : IDisposable
         }
         catch (ObjectDisposedException)
         {
-            // Stopped.
+            // Stopped, or this address went away.
         }
         catch (SocketException ex)
         {
-            if (!_stop.IsCancellationRequested) _onError(ex.Message);
+            OnSocketFailed(address, socket, ex);
         }
+    }
+
+    // One adapter going away is normal. Only losing the last one stops handshake reading.
+    private void OnSocketFailed(IPAddress address, Socket socket, SocketException ex)
+    {
+        bool noneLeft;
+        lock (_socketGate)
+        {
+            if (_sockets.TryGetValue(address, out var known) && ReferenceEquals(known, socket)) _sockets.Remove(address);
+            noneLeft = _sockets.Count == 0;
+        }
+        socket.Dispose();
+        if (noneLeft && !_stopped) _onError(ex.Message);
     }
 
     public void Dispose()
     {
-        _stop.Cancel();
-        foreach (var socket in _sockets) socket.Dispose();
-        _sockets.Clear();
+        NetworkChange.NetworkAddressChanged -= OnAddressChanged;
+        lock (_socketGate)
+        {
+            _stopped = true;
+            _stop.Cancel();
+            foreach (var socket in _sockets.Values) socket.Dispose();
+            _sockets.Clear();
+        }
         _stop.Dispose();
     }
 }

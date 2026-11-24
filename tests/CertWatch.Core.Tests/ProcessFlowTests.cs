@@ -87,6 +87,27 @@ public class ProcessFlowTests
     }
 
     [Fact]
+    public void An_outgoing_hello_with_offloaded_length_zero_is_still_read()
+    {
+        var assembler = new HandshakeAssembler(_ => true);
+        var packet = Out(100, 900, Hello("offload.example"));
+        packet[2] = packet[3] = 0;
+        Assert.Equal("offload.example", assembler.Process(packet)!.View.Client!.ServerName);
+    }
+
+    [Fact]
+    public void Counters_tell_a_blind_capture_from_a_quiet_process()
+    {
+        var assembler = new HandshakeAssembler(key => key.LocalPort == LocalPort);
+        assembler.Process(Out(100, 900, Hello("mine.example")));
+        assembler.Process(Packet(Local, 50999, Remote, 443, 1, 1, Ack, Hello("other.example")));
+        assembler.Process([1, 2, 3]);
+        Assert.Equal(3, assembler.PacketsSeen);
+        Assert.Equal(2, assembler.ClientHellosSeen);
+        Assert.Equal(1, assembler.ConnectionsFollowed);
+    }
+
+    [Fact]
     public void Connections_of_other_processes_are_never_kept()
     {
         var asked = 0;

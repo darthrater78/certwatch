@@ -33,7 +33,7 @@ internal sealed record FlowSnapshot(string Key, StatusKind Status, string Chip, 
 /// <summary>The pinning answer for display. Status drives the shared chip and tint styles.</summary>
 internal sealed record PinView(StatusKind Status, string Label, string Headline, string Why, string Next);
 
-internal sealed record FlowFrame(IReadOnlyList<FlowSnapshot> Rows, int ProcessCount, string? CaptureError, int Generation);
+internal sealed record FlowFrame(IReadOnlyList<FlowSnapshot> Rows, int ProcessCount, string? CaptureError, int Generation, CaptureStats? Capture);
 
 /// <summary>
 /// Follows one process: reads its connections each second, makes CertWatch's own handshakes to where
@@ -233,7 +233,7 @@ internal sealed class ProcessFlowSession : IDisposable
             Interlocked.Increment(ref _active);
             _ = Task.Run(() => ProbeAsync(request));
         }
-        _publish(new FlowFrame(rows, pids.Count, _captureError, generation));
+        _publish(new FlowFrame(rows, pids.Count, _captureError, generation, _capture?.Stats));
     }
 
     // Local traffic between apps says nothing about the network path, so it's left out of the full list.

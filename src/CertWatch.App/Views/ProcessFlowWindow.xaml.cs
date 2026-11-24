@@ -287,8 +287,11 @@ public partial class ProcessFlowWindow : Window
         var running = frame.ProcessCount == 0 && !target.AllProcesses
             ? $"{target.Name} isn't running"
             : $"{target.Name}: {Plural(frame.ProcessCount, "process", "processes")}, {Plural(open, "open connection", "open connections")}, {Plural(_rows.Count, "destination", "destinations")}";
-        StatusText.Text = frame.CaptureError is { } error ? $"{running}. Handshake reading stopped: {error}" : running;
+        StatusText.Text = frame.CaptureError is { } error ? $"{running}. Handshake reading stopped: {error}" : running + CaptureText(frame.Capture);
     }
+
+    private static string CaptureText(CaptureStats? s) => s is null ? "" :
+        $"  ·  Handshake reading: {Plural(s.Adapters, "adapter", "adapters")}, {s.Packets:N0} packets, {Plural((int)Math.Min(s.TlsConnections, int.MaxValue), "new TLS connection", "new TLS connections")}, {s.Followed:N0} followed";
 
     private void UpdateEmptyText(FlowFrame frame, ProcessTarget target)
     {

@@ -36,9 +36,17 @@ public sealed class HandshakeAssembler(Func<FlowKey, bool> isTarget, TimeProvide
     /// <summary>Connections being followed or remembered as finished (for tests and limits).</summary>
     public int FlowCount => _flows.Count;
 
+    /// <summary>Packets handed in, whatever they were.</summary>
+    public long PacketsSeen { get; private set; }
+    /// <summary>New TLS connections seen from any process. Their contents aren't kept unless targeted.</summary>
+    public long ClientHellosSeen { get; private set; }
+    /// <summary>Of those, how many belonged to the target and were followed.</summary>
+    public long ConnectionsFollowed { get; private set; }
+
     /// <summary>Feeds one IPv4 packet. Returns an update when a followed handshake shows something new.</summary>
     public HandshakeUpdate? Process(ReadOnlySpan<byte> packet)
     {
+        PacketsSeen++;
         if (!TryDecode(packet, out var forward, out var seq, out var ack, out var flags, out var payload)) return null;
         var reverse = new PacketFlow(forward.DestIp, forward.DestPort, forward.SourceIp, forward.SourcePort);
 
@@ -80,6 +88,7 @@ public sealed class HandshakeAssembler(Func<FlowKey, bool> isTarget, TimeProvide
         if (_flows.TryGetValue(reverse, out flow)) return flow.Done || flow.Awaiting ? null : Advance(reverse, flow, flow.Server, seq, payload);
         if (_ignored.Contains(forward) || !StartsClientHello(payload)) return null;
 
+        ClientHellosSeen++;
         if (!isTarget(forward.ToKey()))
         {
             if (_ignored.Count >= MaxIgnored) _ignored.Clear();
@@ -90,6 +99,7 @@ public sealed class HandshakeAssembler(Func<FlowKey, bool> isTarget, TimeProvide
         // The hello's acknowledgement number is where the server's first byte will be.
         flow = new Flow(seq, ack);
         _flows[forward] = flow;
+        ConnectionsFollowed++;
         return Advance(forward, flow, flow.Client, seq, payload);
     }
 
@@ -159,7 +169,10 @@ public sealed class HandshakeAssembler(Func<FlowKey, bool> isTarget, TimeProvide
         if (packet.Length < 20 || packet[0] >> 4 != 4 || packet[9] != ProtocolTcp) return false;
 
         var headerLength = (packet[0] & 0x0F) * 4;
-        var totalLength = BinaryPrimitives.ReadUInt16BigEndian(packet[2..]);
+        int totalLength = BinaryPrimitives.ReadUInt16BigEndian(packet[2..]);
+        // With large-send offload the adapter fills this in later, so a local copy of an outgoing
+        // packet can read 0. Large post-quantum ClientHellos are exactly the packets that hits.
+        if (totalLength == 0) totalLength = packet.Length;
         // Fragments can't be read as TCP: more-fragments set, or a non-zero offset.
         if ((BinaryPrimitives.ReadUInt16BigEndian(packet[6..]) & 0x3FFF) != 0) return false;
         if (headerLength < 20 || totalLength < headerLength + 20 || totalLength > packet.Length) return false;
